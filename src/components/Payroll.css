@@ -1,0 +1,31 @@
+/* Payroll Page Styles */
+.payroll-card {
+  transition: all 0.3s ease;
+}
+
+.payroll-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+.table-hover tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.modal.show {
+  display: block;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.alert-success h4, .alert-success h5 {
+  color: #155724;
+}

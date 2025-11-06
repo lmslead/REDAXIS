@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redaxis HRMS - Color Palette</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            padding: 2rem;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #E63946 0%, #457B9D 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #6C757D;
+            font-size: 1.1rem;
+            margin-bottom: 3rem;
+        }
+
+        .section {
+            margin-bottom: 3rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1D3557;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #E63946;
+            padding-left: 1rem;
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .color-card {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .color-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .color-swatch {
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .color-info {
+            padding: 1rem;
+            background: white;
+        }
+
+        .color-name {
+            font-weight: 700;
+            font-size: 1rem;
+            color: #212529;
+            margin-bottom: 0.5rem;
+        }
+
+        .color-hex {
+            font-family: 'Courier New', monospace;
+            color: #6C757D;
+            font-size: 0.9rem;
+            background: #f8f9fa;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .color-usage {
+            font-size: 0.85rem;
+            color: #6C757D;
+            margin-top: 0.5rem;
+        }
+
+        .gradient-demo {
+            height: 150px;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.3rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .gradient-label {
+            text-align: center;
+            color: #6C757D;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .component-demo {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .demo-button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+        }
+
+        .demo-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Redaxis HRMS Design System</h1>
+        <p class="subtitle">Professional Color Palette & Brand Guidelines</p>
+
+        <!-- Primary Colors -->
+        <div class="section">
+            <h2 class="section-title">Primary Colors</h2>
+            <div class="color-grid">
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #E63946;">
+                        ⭐
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Primary Red</div>
+                        <div class="color-hex">#E63946</div>
+                        <div class="color-usage">Brand signature, accents, CTAs</div>
+                    </div>
+                </div>
+
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #1D3557;">
+                        🔷
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Primary Blue</div>
+                        <div class="color-hex">#1D3557</div>
+                        <div class="color-usage">Headers, sidebar, professional elements</div>
+                    </div>
+                </div>
+
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #457B9D;">
+                        💙
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Accent Blue</div>
+                        <div class="color-hex">#457B9D</div>
+                        <div class="color-usage">Interactive elements, links, buttons</div>
+                    </div>
+                </div>
+
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #A8DADC;">
+                        🌊
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Light Blue</div>
+                        <div class="color-hex">#A8DADC</div>
+                        <div class="color-usage">Backgrounds, subtle accents</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Colors -->
+        <div class="section">
+            <h2 class="section-title">Status Colors</h2>
+            <div class="color-grid">
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #06D6A0;">
+                        ✅
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Success</div>
+                        <div class="color-hex">#06D6A0</div>
+                        <div class="color-usage">Success messages, approved status</div>
+                    </div>
+                </div>
+
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #FFB703;">
+                        ⚠️
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Warning</div>
+                        <div class="color-hex">#FFB703</div>
+                        <div class="color-usage">Warnings, pending status</div>
+                    </div>
+                </div>
+
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #E63946;">
+                        ❌
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Danger</div>
+                        <div class="color-hex">#E63946</div>
+                        <div class="color-usage">Errors, critical actions</div>
+                    </div>
+                </div>
+
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #457B9D;">
+                        ℹ️
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Info</div>
+                        <div class="color-hex">#457B9D</div>
+                        <div class="color-usage">Information, neutral status</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Neutral Colors -->
+        <div class="section">
+            <h2 class="section-title">Neutral Colors</h2>
+            <div class="color-grid">
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #FFFFFF; border: 1px solid #E9ECEF;">
+                        <span style="color: #212529;">⚪</span>
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">White</div>
+                        <div class="color-hex">#FFFFFF</div>
+                        <div class="color-usage">Backgrounds, cards</div>
+                    </div>
+                </div>
+
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #F8F9FA;">
+                        <span style="color: #212529;">⬜</span>
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Off-White</div>
+                        <div class="color-hex">#F8F9FA</div>
+                        <div class="color-usage">Page backgrounds</div>
+                    </div>
+                </div>
+
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #6C757D;">
+                        ⬛
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Medium Gray</div>
+                        <div class="color-hex">#6C757D</div>
+                        <div class="color-usage">Secondary text, muted elements</div>
+                    </div>
+                </div>
+
+                <div class="color-card">
+                    <div class="color-swatch" style="background: #212529;">
+                        ⚫
+                    </div>
+                    <div class="color-info">
+                        <div class="color-name">Dark Gray</div>
+                        <div class="color-hex">#212529</div>
+                        <div class="color-usage">Primary text, headings</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gradients -->
+        <div class="section">
+            <h2 class="section-title">Signature Gradients</h2>
+            
+            <div class="gradient-demo" style="background: linear-gradient(180deg, #1D3557 0%, #2A4A6B 100%);">
+                Sidebar Gradient
+            </div>
+            <div class="gradient-label">Linear Gradient: #1D3557 → #2A4A6B (180deg)</div>
+
+            <div class="gradient-demo" style="background: linear-gradient(135deg, #E63946 0%, #c42e3a 100%);">
+                Button Gradient (Red)
+            </div>
+            <div class="gradient-label">Linear Gradient: #E63946 → #c42e3a (135deg)</div>
+
+            <div class="gradient-demo" style="background: linear-gradient(135deg, #457B9D 0%, #1D3557 100%);">
+                Button Gradient (Blue)
+            </div>
+            <div class="gradient-label">Linear Gradient: #457B9D → #1D3557 (135deg)</div>
+        </div>
+
+        <!-- Component Demos -->
+        <div class="section">
+            <h2 class="section-title">Component Examples</h2>
+            <div class="component-demo">
+                <button class="demo-button" style="background: linear-gradient(135deg, #E63946 0%, #c42e3a 100%);">
+                    Primary Action
+                </button>
+                <button class="demo-button" style="background: linear-gradient(135deg, #457B9D 0%, #1D3557 100%);">
+                    Secondary Action
+                </button>
+                <button class="demo-button" style="background: linear-gradient(135deg, #06D6A0 0%, #05b58a 100%);">
+                    Success Action
+                </button>
+                <button class="demo-button" style="background: linear-gradient(135deg, #FFB703 0%, #f59f00 100%);">
+                    Warning Action
+                </button>
+            </div>
+        </div>
+
+        <!-- Usage Guidelines -->
+        <div class="section">
+            <h2 class="section-title">Usage Guidelines</h2>
+            <ul style="color: #6C757D; line-height: 2; padding-left: 1.5rem;">
+                <li><strong style="color: #1D3557;">Primary Red (#E63946)</strong>: Use for CTAs, important buttons, active states, and brand emphasis</li>
+                <li><strong style="color: #1D3557;">Primary Blue (#1D3557)</strong>: Use for navigation, headers, and professional elements</li>
+                <li><strong style="color: #1D3557;">Accent Blue (#457B9D)</strong>: Use for links, interactive elements, and secondary buttons</li>
+                <li><strong style="color: #1D3557;">Status Colors</strong>: Use consistently for success, warning, danger, and info messages</li>
+                <li><strong style="color: #1D3557;">Gradients</strong>: Use for depth and modern appeal on buttons and headers</li>
+                <li><strong style="color: #1D3557;">Neutral Colors</strong>: Use for text hierarchy and backgrounds</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

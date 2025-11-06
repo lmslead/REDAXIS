@@ -1,0 +1,22 @@
+/* Resignation Component Styles */
+.resignation-card {
+  transition: all 0.3s ease;
+}
+
+.resignation-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.exit-procedure-item {
+  border-left: 4px solid #e9ecef;
+  padding-left: 1rem;
+}
+
+.exit-procedure-item.completed {
+  border-left-color: #28a745;
+}
+
+.exit-procedure-item.pending {
+  border-left-color: #ffc107;
+}

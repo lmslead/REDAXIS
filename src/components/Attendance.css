@@ -1,0 +1,53 @@
+/* Attendance Page Styles */
+.attendance-present {
+  background-color: #28a745 !important;
+  color: white !important;
+}
+
+.attendance-absent {
+  background-color: #dc3545 !important;
+  color: white !important;
+}
+
+.attendance-halfday {
+  background-color: #ffc107 !important;
+  color: white !important;
+}
+
+.attendance-leave {
+  background-color: #17a2b8 !important;
+  color: white !important;
+}
+
+.attendance-legend {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.react-calendar {
+  border: none !important;
+  font-family: inherit;
+}
+
+.react-calendar__tile {
+  position: relative;
+  padding: 10px 6px;
+  background: none;
+  text-align: center;
+  line-height: 16px;
+}
+
+.react-calendar__tile--active {
+  background: #006edc !important;
+  color: white !important;
+}
+
+.react-calendar__tile--now {
+  background: #f0f0f0;
+}
+
+.react-calendar__month-view__days__day--weekend {
+  color: #d10000;
+}

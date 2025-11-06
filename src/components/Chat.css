@@ -1,0 +1,22 @@
+/* Chat Page Styles */
+.chat-item {
+  transition: background-color 0.2s;
+}
+
+.chat-item:hover {
+  background-color: #f8f9fa;
+}
+
+.chat-item.active {
+  background-color: #e7f1ff;
+  border-left: 3px solid #0d6efd;
+}
+
+.card-header, .card-footer {
+  border: none;
+}
+
+.message-bubble {
+  max-width: 70%;
+  word-wrap: break-word;
+}
