@@ -205,12 +205,19 @@ export const attendanceAPI = {
     const queryString = new URLSearchParams(params).toString();
     return apiRequest(`/attendance${queryString ? `?${queryString}` : ''}`);
   },
-  checkIn: () => apiRequest('/attendance/check-in', { method: 'POST' }),
-  checkOut: () => apiRequest('/attendance/check-out', { method: 'POST' }),
+  checkIn: (locationData) => apiRequest('/attendance/check-in', { 
+    method: 'POST',
+    body: JSON.stringify({ locationData })
+  }),
+  checkOut: (locationData) => apiRequest('/attendance/check-out', { 
+    method: 'POST',
+    body: JSON.stringify({ locationData })
+  }),
   getStats: (params) => {
     const queryString = new URLSearchParams(params).toString();
     return apiRequest(`/attendance/stats?${queryString}`);
   },
+  getLocationConfig: () => apiRequest('/attendance/location-config'),
 };
 
 // Leave API

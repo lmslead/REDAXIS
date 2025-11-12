@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { attendanceAPI, employeesAPI, getUser, leaveAPI } from '../services/api';
+import { getLocationData, validateLocationClient, getLocationErrorMessage, requestLocationPermission } from '../services/locationService';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import './Attendance.css';
@@ -18,6 +19,9 @@ const Attendance = () => {
   const [filterType, setFilterType] = useState('month'); // 'month' or 'date'
   const [specificDate, setSpecificDate] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [locationConfig, setLocationConfig] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
   
   const currentUser = getUser();
   console.log('🔍 Current user from localStorage:', currentUser);
@@ -40,7 +44,18 @@ const Attendance = () => {
     fetchAttendance();
     fetchStats();
     checkTodayStatus();
+    fetchLocationConfig();
   }, [selectedDate, selectedEmployee, filterMonth, filterYear, filterType, specificDate]);
+
+  const fetchLocationConfig = async () => {
+    try {
+      const response = await attendanceAPI.getLocationConfig();
+      setLocationConfig(response.data);
+      console.log('🌍 Location config loaded:', response.data);
+    } catch (error) {
+      console.error('Failed to load location config:', error);
+    }
+  };
 
   const fetchAttendance = async () => {
     try {
@@ -215,70 +230,180 @@ const Attendance = () => {
   };
 
   const handleCheckIn = async () => {
+    if (!locationConfig) {
+      alert('Loading location settings. Please try again.');
+      return;
+    }
+
+    setLocationLoading(true);
+    setLocationError('');
+
     try {
       console.log('Attendance handleCheckIn: Starting check-in...');
-      const response = await attendanceAPI.checkIn();
-      
-      console.log('Attendance handleCheckIn: Response received:', response);
-      
-      // Check if the response indicates already checked in
-      if (response.success === false) {
-        alert(response.message || 'Already checked in today');
-        console.log('Attendance handleCheckIn: Already checked in, refreshing...');
-        // Refresh the status to update UI
+
+      // Skip location validation if disabled
+      if (!locationConfig.restrictionEnabled) {
+        console.log('🌍 Location restriction disabled, proceeding without validation');
+        const response = await attendanceAPI.checkIn(null);
+        
+        if (response.success === false) {
+          alert(response.message || 'Already checked in today');
+          await checkTodayStatus();
+          await fetchAttendance();
+          await fetchStats();
+          return;
+        }
+
+        alert('Checked in successfully!');
         await checkTodayStatus();
         await fetchAttendance();
         await fetchStats();
         return;
       }
+
+      // Request location permission first
+      const hasPermission = await requestLocationPermission();
+      if (!hasPermission) {
+        throw new Error('Location permission is required for check-in. Please enable location access and try again.');
+      }
+
+      // Get location data
+      console.log('🌍 Getting location data for check-in...');
+      const locationData = await getLocationData();
       
-      alert('Checked in successfully!');
+      // Client-side validation (informational)
+      const clientValidation = validateLocationClient(locationData, locationConfig);
+      if (!clientValidation.isValid) {
+        console.warn('⚠️ Client-side location validation failed:', clientValidation.violations);
+        // Still proceed to server for final validation
+      }
+
+      // Send check-in request with location data
+      const response = await attendanceAPI.checkIn(locationData);
+      
+      console.log('Attendance handleCheckIn: Response received:', response);
+      
+      if (response.success === false) {
+        if (response.violations) {
+          const errorMessage = getLocationErrorMessage(response.violations);
+          setLocationError(errorMessage);
+          alert(`Check-in Failed:\n\n${errorMessage}`);
+        } else {
+          alert(response.message || 'Check-in failed');
+        }
+        await checkTodayStatus();
+        await fetchAttendance();
+        await fetchStats();
+        return;
+      }
+
       console.log('Attendance handleCheckIn: Success! Refreshing data...');
-      // Refresh status from server to ensure UI is correct
+      const successMessage = response.message || 'Checked in successfully!';
+      alert(successMessage);
+      
       await checkTodayStatus();
       await fetchAttendance();
       await fetchStats();
+      
     } catch (error) {
       console.error('Attendance handleCheckIn: Error occurred:', error);
-      alert(error.message || 'Check-in failed');
-      // Refresh status in case of "already checked in" error
+      const errorMessage = error.message || 'Failed to check in. Please try again.';
+      setLocationError(errorMessage);
+      alert(errorMessage);
       await checkTodayStatus();
       await fetchAttendance();
       await fetchStats();
+    } finally {
+      setLocationLoading(false);
     }
   };
 
   const handleCheckOut = async () => {
+    if (!locationConfig) {
+      alert('Loading location settings. Please try again.');
+      return;
+    }
+
+    setLocationLoading(true);
+    setLocationError('');
+
     try {
       console.log('Attendance handleCheckOut: Starting check-out...');
-      const response = await attendanceAPI.checkOut();
-      
-      console.log('Attendance handleCheckOut: Response received:', response);
-      
-      // Check if the response indicates already checked out
-      if (response.success === false) {
-        alert(response.message || 'Already checked out today');
-        console.log('Attendance handleCheckOut: Already checked out, refreshing...');
-        // Refresh the status to update UI
+
+      // Skip location validation if disabled
+      if (!locationConfig.restrictionEnabled) {
+        console.log('🌍 Location restriction disabled, proceeding without validation');
+        const response = await attendanceAPI.checkOut(null);
+        
+        if (response.success === false) {
+          alert(response.message || 'Already checked out today');
+          await checkTodayStatus();
+          await fetchAttendance();
+          await fetchStats();
+          return;
+        }
+
+        alert(response.message || 'Checked out successfully!');
         await checkTodayStatus();
         await fetchAttendance();
         await fetchStats();
         return;
       }
+
+      // Request location permission first
+      const hasPermission = await requestLocationPermission();
+      if (!hasPermission) {
+        throw new Error('Location permission is required for check-out. Please enable location access and try again.');
+      }
+
+      // Get location data
+      console.log('🌍 Getting location data for check-out...');
+      const locationData = await getLocationData();
       
-      alert('Checked out successfully!');
+      // Client-side validation (informational)
+      const clientValidation = validateLocationClient(locationData, locationConfig);
+      if (!clientValidation.isValid) {
+        console.warn('⚠️ Client-side location validation failed:', clientValidation.violations);
+        // Still proceed to server for final validation
+      }
+
+      // Send check-out request with location data
+      const response = await attendanceAPI.checkOut(locationData);
+      
+      console.log('Attendance handleCheckOut: Response received:', response);
+      
+      if (response.success === false) {
+        if (response.violations) {
+          const errorMessage = getLocationErrorMessage(response.violations);
+          setLocationError(errorMessage);
+          alert(`Check-out Failed:\n\n${errorMessage}`);
+        } else {
+          alert(response.message || 'Check-out failed');
+        }
+        await checkTodayStatus();
+        await fetchAttendance();
+        await fetchStats();
+        return;
+      }
+
       console.log('Attendance handleCheckOut: Success! Refreshing data...');
-      // Refresh status from server to ensure UI is correct
+      const successMessage = response.message || 'Checked out successfully!';
+      alert(successMessage);
+      
       await checkTodayStatus();
       await fetchAttendance();
       await fetchStats();
+      
     } catch (error) {
       console.error('Attendance handleCheckOut: Error occurred:', error);
-      alert(error.message || 'Check-out failed');
-      // Refresh status in case of "already checked out" error
+      const errorMessage = error.message || 'Failed to check out. Please try again.';
+      setLocationError(errorMessage);
+      alert(errorMessage);
       await checkTodayStatus();
       await fetchAttendance();
       await fetchStats();
+    } finally {
+      setLocationLoading(false);
     }
   };
 
@@ -778,19 +903,88 @@ const Attendance = () => {
                     <small className="text-muted d-block">Working Hours</small>
                     <strong>{calculateWorkingHours(todayAttendance.checkIn, todayAttendance.checkOut)}</strong>
                   </div>
+                  {todayAttendance.checkInLocation && (
+                    <div className="mb-3">
+                      <small className="text-muted d-block">Location Verification</small>
+                      <div className="small">
+                        {todayAttendance.checkInLocation.locationVerified ? (
+                          <span className="text-success">
+                            <i className="bi bi-check-circle-fill me-1"></i>
+                            Verified ({todayAttendance.checkInLocation.distanceFromOffice}m from office)
+                          </span>
+                        ) : (
+                          <span className="text-warning">
+                            <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                            Not verified
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-muted">No attendance recorded today</p>
               )}
               
+              {/* Location Status */}
+              {locationConfig && locationConfig.restrictionEnabled && (
+                <div className="mb-3">
+                  <small className="text-muted d-block">Location Requirements</small>
+                  <div className="small">
+                    <div className="text-info">
+                      <i className="bi bi-geo-alt me-1"></i>
+                      Within {locationConfig.maxDistance}m of {locationConfig.officeLocation.name}
+                    </div>
+                    <div className="text-info">
+                      <i className="bi bi-wifi me-1"></i>
+                      Company network: {locationConfig.companyWiFi}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Location Error Display */}
+              {locationError && (
+                <div className="alert alert-warning alert-sm mb-3">
+                  <i className="bi bi-exclamation-triangle me-2"></i>
+                  <small>{locationError}</small>
+                </div>
+              )}
+
               <div className="d-grid gap-2 mt-3">
                 {!checkedIn ? (
-                  <button className="btn btn-success" onClick={handleCheckIn}>
-                    <i className="bi bi-box-arrow-in-right me-2"></i>Check In
+                  <button 
+                    className="btn btn-success" 
+                    onClick={handleCheckIn} 
+                    disabled={locationLoading}
+                  >
+                    {locationLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Getting Location...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-box-arrow-in-right me-2"></i>Check In
+                      </>
+                    )}
                   </button>
                 ) : (
-                  <button className="btn btn-danger" onClick={handleCheckOut}>
-                    <i className="bi bi-box-arrow-right me-2"></i>Check Out
+                  <button 
+                    className="btn btn-danger" 
+                    onClick={handleCheckOut}
+                    disabled={locationLoading}
+                  >
+                    {locationLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Getting Location...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-box-arrow-right me-2"></i>Check Out
+                      </>
+                    )}
                   </button>
                 )}
               </div>

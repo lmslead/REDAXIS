@@ -28,6 +28,33 @@ const attendanceSchema = new mongoose.Schema({
   notes: {
     type: String,
   },
+  // Location tracking for check-in/out
+  checkInLocation: {
+    latitude: { type: Number },
+    longitude: { type: Number },
+    accuracy: { type: Number },
+    address: { type: String },
+    networkInfo: {
+      ip: { type: String },
+      userAgent: { type: String },
+      wifiSSID: { type: String }
+    },
+    distanceFromOffice: { type: Number }, // in meters
+    locationVerified: { type: Boolean, default: false }
+  },
+  checkOutLocation: {
+    latitude: { type: Number },
+    longitude: { type: Number },
+    accuracy: { type: Number },
+    address: { type: String },
+    networkInfo: {
+      ip: { type: String },
+      userAgent: { type: String },
+      wifiSSID: { type: String }
+    },
+    distanceFromOffice: { type: Number }, // in meters
+    locationVerified: { type: Boolean, default: false }
+  }
 }, {
   timestamps: true,
 });

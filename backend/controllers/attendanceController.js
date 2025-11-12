@@ -1,6 +1,7 @@
 import Attendance from '../models/Attendance.js';
 import User from '../models/User.js';
 import mongoose from 'mongoose';
+import { validateLocation, calculateDistance, getLocationConfig as getLocationConfigUtil } from '../utils/locationValidator.js';
 
 // ⏰ HELPER FUNCTION: Calculate if a date is a working day
 const isWorkingDay = (date, saturdayWorking = false) => {
@@ -249,6 +250,28 @@ export const checkIn = async (req, res) => {
       // If saturdayWorking is true, allow check-in
     }
 
+    // 🌍 LOCATION & NETWORK VALIDATION
+    const { locationData } = req.body;
+    const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
+
+    console.log('🌍 Check-in location validation:', {
+      locationData,
+      clientIP,
+      userAgent: userAgent?.substring(0, 50) + '...'
+    });
+
+    const locationValidation = validateLocation(locationData, clientIP, userAgent);
+    
+    if (!locationValidation.isValid) {
+      return res.status(403).json({
+        success: false,
+        message: 'Location verification failed',
+        violations: locationValidation.violations,
+        details: locationValidation.details
+      });
+    }
+
     let attendance = await Attendance.findOne({
       employee: req.user.id,
       date: today,
@@ -258,21 +281,44 @@ export const checkIn = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Already checked in today' });
     }
 
+    // Prepare location data for storage
+    const checkInLocationData = {
+      latitude: locationData?.latitude,
+      longitude: locationData?.longitude,
+      accuracy: locationData?.accuracy,
+      address: locationData?.address,
+      networkInfo: {
+        ip: clientIP,
+        userAgent,
+        wifiSSID: locationData?.networkInfo?.wifiSSID
+      },
+      distanceFromOffice: locationValidation.details.distanceFromOffice,
+      locationVerified: locationValidation.isValid
+    };
+
     if (!attendance) {
       attendance = await Attendance.create({
         employee: req.user.id,
         date: today,
         checkIn: new Date(),
         status: 'present',
+        checkInLocation: checkInLocationData
       });
     } else {
       attendance.checkIn = new Date();
       attendance.status = 'present';
+      attendance.checkInLocation = checkInLocationData;
       await attendance.save();
     }
 
-    res.status(200).json({ success: true, data: attendance });
+    res.status(200).json({ 
+      success: true, 
+      data: attendance,
+      locationDetails: locationValidation.details,
+      message: `Checked in successfully from ${locationValidation.details.distanceFromOffice}m away from office`
+    });
   } catch (error) {
+    console.error('Check-in error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -295,7 +341,46 @@ export const checkOut = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Already checked out today' });
     }
 
+    // 🌍 LOCATION & NETWORK VALIDATION FOR CHECK-OUT
+    const { locationData } = req.body;
+    const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
+
+    console.log('🌍 Check-out location validation:', {
+      locationData,
+      clientIP,
+      userAgent: userAgent?.substring(0, 50) + '...'
+    });
+
+    const locationValidation = validateLocation(locationData, clientIP, userAgent);
+    
+    if (!locationValidation.isValid) {
+      return res.status(403).json({
+        success: false,
+        message: 'Location verification failed',
+        violations: locationValidation.violations,
+        details: locationValidation.details
+      });
+    }
+
+    // Prepare location data for storage
+    const checkOutLocationData = {
+      latitude: locationData?.latitude,
+      longitude: locationData?.longitude,
+      accuracy: locationData?.accuracy,
+      address: locationData?.address,
+      networkInfo: {
+        ip: clientIP,
+        userAgent,
+        wifiSSID: locationData?.networkInfo?.wifiSSID
+      },
+      distanceFromOffice: locationValidation.details.distanceFromOffice,
+      locationVerified: locationValidation.isValid
+    };
+
     attendance.checkOut = new Date();
+    attendance.checkOutLocation = checkOutLocationData;
+    
     const hours = (attendance.checkOut - attendance.checkIn) / (1000 * 60 * 60);
     attendance.workingHours = Math.round(hours * 100) / 100;
     
@@ -314,9 +399,11 @@ export const checkOut = async (req, res) => {
     res.status(200).json({ 
       success: true, 
       data: attendance,
-      message: `Checked out successfully. Status: ${attendance.status} (${attendance.workingHours} hours)` 
+      locationDetails: locationValidation.details,
+      message: `Checked out successfully from ${locationValidation.details.distanceFromOffice}m away from office. Status: ${attendance.status} (${attendance.workingHours} hours)` 
     });
   } catch (error) {
+    console.error('Check-out error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -334,6 +421,17 @@ export const updateAttendance = async (req, res) => {
 
     res.status(200).json({ success: true, data: attendance });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get location configuration for frontend
+export const getLocationConfig = async (req, res) => {
+  try {
+    const config = getLocationConfigUtil();
+    res.status(200).json({ success: true, data: config });
+  } catch (error) {
+    console.error('Location config error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
