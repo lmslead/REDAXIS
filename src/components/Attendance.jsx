@@ -910,7 +910,7 @@ const Attendance = () => {
                         {todayAttendance.checkInLocation.locationVerified ? (
                           <span className="text-success">
                             <i className="bi bi-check-circle-fill me-1"></i>
-                            Verified ({todayAttendance.checkInLocation.distanceFromOffice}m from office)
+                            Verified ({todayAttendance.checkInLocation.distanceFromOffice}I am in office)
                           </span>
                         ) : (
                           <span className="text-warning">

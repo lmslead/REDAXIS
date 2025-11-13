@@ -28,7 +28,14 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors());
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://rgstaffhub.reddingtonglobal.com', 'http://rgstaffhub.reddingtonglobal.com']
+    : ['http://localhost:5173', 'http://localhost:3000'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -62,7 +69,7 @@ app.use('/api/resignations', resignationRoutes);
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
-    message: 'Redaxis HRMS Backend is running',
+    message: 'RG Staff Hub Backend is running',
     timestamp: new Date().toISOString()
   });
 });
@@ -79,7 +86,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Redaxis HRMS Server running on port ${PORT}`);
+  console.log(`🚀 RG Staff Hub Server running on port ${PORT}`);
 });
 
 export default app;

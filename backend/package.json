@@ -1,7 +1,7 @@
 {
-  "name": "redaxis-hrms-backend",
+  "name": "rg-staff-hub-backend",
   "version": "1.0.0",
-  "description": "Redaxis HRMS Backend API",
+  "description": "RG Staff Hub Backend API",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "seed": "node config/seed.js"
   },
   "keywords": ["hrms", "backend", "express", "mongodb"],
-  "author": "Redaxis",
+  "author": "RG Staff Hub",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",

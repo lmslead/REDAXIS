@@ -84,7 +84,7 @@ const SideBar = () => {
   return (
     <div className="sidebar">
       <div className="logo-container">
-        <img src={logo} alt="Logo" className="logo" />
+        <img src={logo} alt="RG Staff Hub" className="logo" />
       </div>
 
       <div className="user-info">

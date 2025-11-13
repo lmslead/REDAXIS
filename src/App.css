@@ -1,8 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300..900&family=Londrina+Sketch&family=Montserrat:wght@100..900&family=Poppins:wght@700&family=Roboto:wght@100..900&family=Silkscreen:wght@400;700&display=swap');
 
-/* === Color Palette (Redaxis HRMS Theme) === */
+/* === Color Palette (RG Staff Hub Theme) === */
 :root {
-  /* Primary Colors - Based on Redaxis Logo */
+  /* Primary Colors - Based on RG Staff Hub Logo */
   --primary-red: #E63946;
   --primary-blue: #1D3557;
   --accent-blue: #457B9D;

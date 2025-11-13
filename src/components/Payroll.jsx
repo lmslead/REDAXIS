@@ -74,7 +74,7 @@ const Payroll = () => {
         </head>
         <body>
           <div class="header">
-            <h1>Redaxis HRMS</h1>
+            <h1>RG Staff Hub</h1>
             <h2>PAYSLIP</h2>
             <p>${payroll.month}/${payroll.year}</p>
           </div>

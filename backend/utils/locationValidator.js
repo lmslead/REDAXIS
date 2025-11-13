@@ -6,7 +6,7 @@ const OFFICE_LOCATION = {
   latitude: parseFloat(process.env.OFFICE_LATITUDE) || 28.7041, // Default: New Delhi, India
   longitude: parseFloat(process.env.OFFICE_LONGITUDE) || 77.1025,
   maxDistance: parseInt(process.env.MAX_DISTANCE_METERS) || 100, // 100 meters
-  companyWiFi: process.env.COMPANY_WIFI_SSID || 'REDAXIS_OFFICE_WIFI',
+  companyWiFi: process.env.COMPANY_WIFI_SSID || 'RG_STAFF_HUB_OFFICE_WIFI',
   allowedIPRanges: process.env.ALLOWED_IP_RANGES?.split(',') || ['192.168.1.0/24', '10.0.0.0/16']
 };
 

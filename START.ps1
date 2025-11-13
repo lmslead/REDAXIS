@@ -1,8 +1,8 @@
-# 🚀 START REDAXIS HRMS
+# 🚀 START RG STAFF HUB
 # This script helps you start both backend and frontend servers
 
 Write-Host "===============================================" -ForegroundColor Cyan
-Write-Host "   REDAXIS HRMS - STARTUP SCRIPT" -ForegroundColor Cyan
+Write-Host "   RG STAFF HUB - STARTUP SCRIPT" -ForegroundColor Cyan
 Write-Host "===============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -69,16 +69,16 @@ Write-Host ""
 
 Write-Host "===============================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "✅ REDAXIS HRMS IS STARTING!" -ForegroundColor Green
+Write-Host "✅ RG STAFF HUB IS STARTING!" -ForegroundColor Green
 Write-Host ""
-Write-Host "📝 Quick Access:" -ForegroundColor Yellow
+Write-Host "📋 Quick Access:" -ForegroundColor Yellow
 Write-Host "   Frontend: http://localhost:5173" -ForegroundColor White
 Write-Host "   Backend API: http://localhost:5000/api" -ForegroundColor White
 Write-Host ""
 Write-Host "🔐 Login Credentials (see CREDENTIALS.md):" -ForegroundColor Yellow
-Write-Host "   Admin: admin@redaxis.com / Admin@123" -ForegroundColor White
-Write-Host "   HR: maria@redaxis.com / Maria@123" -ForegroundColor White
-Write-Host "   Employee: john@redaxis.com / John@123" -ForegroundColor White
+Write-Host "   Admin: admin@rgstaffhub.com / Admin@123" -ForegroundColor White
+Write-Host "   HR: maria@rgstaffhub.com / Maria@123" -ForegroundColor White
+Write-Host "   Employee: john@rgstaffhub.com / John@123" -ForegroundColor White
 Write-Host ""
 Write-Host "⏱️  Waiting 5 seconds for servers to start..." -ForegroundColor Cyan
 Start-Sleep -Seconds 5

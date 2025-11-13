@@ -52,7 +52,7 @@ const seedDatabase = async () => {
     const users = await User.create([
       {
         employeeId: 'ADMIN001',
-        email: 'admin@redaxis.com',
+        email: 'admin@rgstaffhub.com',
         password: 'Admin@123',
         firstName: 'Admin',
         lastName: 'User',
@@ -74,7 +74,7 @@ const seedDatabase = async () => {
       },
       {
         employeeId: 'HR001',
-        email: 'maria@redaxis.com',
+        email: 'maria@rgstaffhub.com',
         password: 'Maria@123',
         firstName: 'Maria',
         lastName: "D'Souza",
@@ -96,7 +96,7 @@ const seedDatabase = async () => {
       },
       {
         employeeId: 'EMP001',
-        email: 'john@redaxis.com',
+        email: 'john@rgstaffhub.com',
         password: 'John@123',
         firstName: 'John',
         lastName: 'Cena',
@@ -118,7 +118,7 @@ const seedDatabase = async () => {
       },
       {
         employeeId: 'EMP002',
-        email: 'sarah@redaxis.com',
+        email: 'sarah@rgstaffhub.com',
         password: 'Sarah@123',
         firstName: 'Sarah',
         lastName: 'Johnson',
@@ -138,7 +138,7 @@ const seedDatabase = async () => {
       },
       {
         employeeId: 'EMP003',
-        email: 'david@redaxis.com',
+        email: 'david@rgstaffhub.com',
         password: 'David@123',
         firstName: 'David',
         lastName: 'Smith',
@@ -158,7 +158,7 @@ const seedDatabase = async () => {
       },
       {
         employeeId: 'EMP004',
-        email: 'emily@redaxis.com',
+        email: 'emily@rgstaffhub.com',
         password: 'Emily@123',
         firstName: 'Emily',
         lastName: 'Brown',
@@ -257,7 +257,7 @@ const seedDatabase = async () => {
     await Feed.create([
       {
         author: users[0]._id,
-        content: 'Welcome to Redaxis HRMS! We are excited to have everyone on board. Let us work together to build an amazing workplace culture.',
+        content: 'Welcome to RG Staff Hub! We are excited to have everyone on board. Let us work together to build an amazing workplace culture.',
         type: 'announcement',
       },
       {
@@ -300,18 +300,18 @@ const seedDatabase = async () => {
     console.log('\n📝 Login Credentials:');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('\n👨‍💼 ADMIN ACCOUNT:');
-    console.log('   Email: admin@redaxis.com');
+    console.log('   Email: admin@rgstaffhub.com');
     console.log('   Password: Admin@123');
     console.log('   Role: Administrator (Full Access)');
     console.log('\n👩‍💼 HR MANAGER ACCOUNT:');
-    console.log('   Email: maria@redaxis.com');
+    console.log('   Email: maria@rgstaffhub.com');
     console.log('   Password: Maria@123');
     console.log('   Role: HR Manager');
     console.log('\n👨‍💻 EMPLOYEE ACCOUNTS:');
-    console.log('   1. Email: john@redaxis.com | Password: John@123 (Engineering)');
-    console.log('   2. Email: sarah@redaxis.com | Password: Sarah@123 (Marketing)');
-    console.log('   3. Email: david@redaxis.com | Password: David@123 (Sales)');
-    console.log('   4. Email: emily@redaxis.com | Password: Emily@123 (Finance)');
+    console.log('   1. Email: john@rgstaffhub.com | Password: John@123 (Engineering)');
+    console.log('   2. Email: sarah@rgstaffhub.com | Password: Sarah@123 (Marketing)');
+    console.log('   3. Email: david@rgstaffhub.com | Password: David@123 (Sales)');
+    console.log('   4. Email: emily@rgstaffhub.com | Password: Emily@123 (Finance)');
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     process.exit(0);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
-import logo from '../assets/Logo.png';
+import logo from '../../public/rgglogoooo.png';
 import './Login.css';
 
 const Login = () => {
@@ -30,8 +30,8 @@ const Login = () => {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <img src={logo} alt="Redaxis HRMS Logo" className="login-logo" />
-          <h1>Redaxis HRMS</h1>
+          <img src={logo} alt="RG Staff Hub Logo" className="login-logo" />
+          <h1></h1>
           <p>Sign in to access your account</p>
         </div>
 
@@ -73,11 +73,11 @@ const Login = () => {
           <p className="demo-credentials">
             <strong>Demo Credentials:</strong>
             <br />
-            Admin: admin@redaxis.com / Admin@123
+            Admin: admin@rgstaffhub.com / Admin@123
             <br />
-            HR: maria@redaxis.com / Maria@123
+            HR: maria@rgstaffhub.com / Maria@123
             <br />
-            Employee: john@redaxis.com / John@123
+            Employee: john@rgstaffhub.com / John@123
           </p>
         </div>
       </div>
