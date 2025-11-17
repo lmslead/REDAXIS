@@ -83,12 +83,12 @@ const Resignation = () => {
   
   // Check if current user can manage a specific resignation
   const canManageResignation = (resignation) => {
-    if (!canManage) return false;
+    if (!canManage || !resignation?.employee) return false;
     // L4 can manage all resignations
     if (currentUser?.managementLevel === 4) return true;
     // L3 can only manage L0-L2 resignations
     if (currentUser?.managementLevel === 3) {
-      return resignation?.employee?.managementLevel < 3;
+      return (resignation.employee.managementLevel || 0) < 3;
     }
     return false;
   };
@@ -100,9 +100,14 @@ const Resignation = () => {
   const fetchResignations = async () => {
     try {
       const response = await resignationAPI.getAll();
-      setResignations(response.data || []);
+      // Filter out any resignations with missing employee data
+      const validResignations = (response.data || []).filter(resignation => 
+        resignation && resignation.employee
+      );
+      setResignations(validResignations);
     } catch (error) {
       console.error('Error fetching resignations:', error);
+      alert('Failed to fetch resignations. Please refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -162,11 +167,19 @@ const Resignation = () => {
   };
 
   const openExitModal = (resignation) => {
+    if (!resignation?.employee) {
+      alert('Employee data not available for this resignation.');
+      return;
+    }
     setSelectedResignation(resignation);
     setShowExitModal(true);
   };
 
   const openDetailModal = (resignation) => {
+    if (!resignation?.employee) {
+      alert('Employee data not available for this resignation.');
+      return;
+    }
     setSelectedResignation(resignation);
     setShowDetailModal(true);
   };
@@ -315,9 +328,11 @@ const Resignation = () => {
                     >
                       <td>
                         <div>
-                          <strong>{resignation.employee.firstName} {resignation.employee.lastName}</strong>
+                          <strong>
+                            {resignation.employee?.firstName || 'Unknown'} {resignation.employee?.lastName || 'Employee'}
+                          </strong>
                           <br />
-                          <small className="text-muted">{resignation.employee.employeeId}</small>
+                          <small className="text-muted">{resignation.employee?.employeeId || 'N/A'}</small>
                         </div>
                       </td>
                       <td>{formatDate(resignation.resignationDate)}</td>
@@ -425,7 +440,7 @@ const Resignation = () => {
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">
-                  Exit Procedures - {selectedResignation.employee.firstName} {selectedResignation.employee.lastName}
+                  Exit Procedures - {selectedResignation.employee?.firstName || 'Unknown'} {selectedResignation.employee?.lastName || 'Employee'}
                 </h5>
                 <button type="button" className="btn-close" onClick={() => setShowExitModal(false)}></button>
               </div>
@@ -481,7 +496,7 @@ const Resignation = () => {
               <div className="modal-header bg-light py-2">
                 <h6 className="modal-title mb-0">
                   <i className="bi bi-person-badge me-2"></i>
-                  {selectedResignation.employee.firstName} {selectedResignation.employee.lastName}
+                  {selectedResignation.employee?.firstName || 'Unknown'} {selectedResignation.employee?.lastName || 'Employee'}
                   <span className={`badge ms-2 ${getStatusBadge(selectedResignation.status)}`}>
                     {selectedResignation.status.toUpperCase()}
                   </span>
@@ -493,25 +508,25 @@ const Resignation = () => {
                 <div className="row g-2 mb-2">
                   <div className="col-6">
                     <small className="text-muted d-block">Employee ID</small>
-                    <strong>{selectedResignation.employee.employeeId}</strong>
+                    <strong>{selectedResignation.employee?.employeeId || 'N/A'}</strong>
                   </div>
                   <div className="col-6">
                     <small className="text-muted d-block">Position</small>
-                    <strong>{selectedResignation.employee.position || 'N/A'}</strong>
+                    <strong>{selectedResignation.employee?.position || 'N/A'}</strong>
                   </div>
                   <div className="col-6">
                     <small className="text-muted d-block">Department</small>
-                    <strong>{selectedResignation.employee.department?.name || 'N/A'}</strong>
+                    <strong>{selectedResignation.employee?.department?.name || 'N/A'}</strong>
                   </div>
                   <div className="col-6">
                     <small className="text-muted d-block">Management Level</small>
                     <span className={`badge ${
-                      selectedResignation.employee.managementLevel === 4 ? 'bg-dark' :
-                      selectedResignation.employee.managementLevel === 3 ? 'bg-danger' :
-                      selectedResignation.employee.managementLevel === 2 ? 'bg-warning' :
-                      selectedResignation.employee.managementLevel === 1 ? 'bg-info' : 'bg-primary'
+                      (selectedResignation.employee?.managementLevel || 0) === 4 ? 'bg-dark' :
+                      (selectedResignation.employee?.managementLevel || 0) === 3 ? 'bg-danger' :
+                      (selectedResignation.employee?.managementLevel || 0) === 2 ? 'bg-warning' :
+                      (selectedResignation.employee?.managementLevel || 0) === 1 ? 'bg-info' : 'bg-primary'
                     }`}>
-                      L{selectedResignation.employee.managementLevel}
+                      L{selectedResignation.employee?.managementLevel || 0}
                     </span>
                   </div>
                 </div>
@@ -563,7 +578,7 @@ const Resignation = () => {
                         <i className="bi bi-person-circle fs-5 me-2 text-primary"></i>
                         <div>
                           <small className="d-block fw-bold">
-                            {selectedResignation.approvedBy.firstName} {selectedResignation.approvedBy.lastName}
+                            {selectedResignation.approvedBy?.firstName || 'Unknown'} {selectedResignation.approvedBy?.lastName || 'User'}
                           </small>
                           <small className="text-muted">
                             {formatDate(selectedResignation.approvalDate)}
@@ -607,7 +622,7 @@ const Resignation = () => {
                                   {procedure.completedBy && (
                                     <small className="text-muted d-block" style={{ fontSize: '0.75rem' }}>
                                       <i className="bi bi-person-check me-1"></i>
-                                      {procedure.completedBy.firstName} {procedure.completedBy.lastName}
+                                      {procedure.completedBy?.firstName || 'Unknown'} {procedure.completedBy?.lastName || 'User'}
                                     </small>
                                   )}
                                   {procedure.completedDate && (

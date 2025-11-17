@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
-import logo from '../../public/rgglogoooo.png';
+import logo from '../../public/staff.png';
 import './Login.css';
 
 const Login = () => {
