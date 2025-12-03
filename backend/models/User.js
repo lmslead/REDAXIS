@@ -13,6 +13,10 @@ const userSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
   },
+  personalEmail: {
+    type: String,
+    lowercase: true,
+  },
   password: {
     type: String,
     required: [
@@ -65,6 +69,20 @@ const userSchema = new mongoose.Schema({
     default: Date.now,
   },
   address: {
+    street: String,
+    city: String,
+    state: String,
+    zipCode: String,
+    country: String,
+  },
+  currentAddress: {
+    street: String,
+    city: String,
+    state: String,
+    zipCode: String,
+    country: String,
+  },
+  permanentAddress: {
     street: String,
     city: String,
     state: String,

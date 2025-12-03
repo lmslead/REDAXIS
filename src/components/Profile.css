@@ -39,3 +39,31 @@
 small.text-muted {
   font-size: 0.75rem;
 }
+
+.profile-form .card {
+  border-radius: 1rem;
+}
+
+.profile-form .card-body {
+  padding: 1.25rem 1.5rem;
+}
+
+.profile-form .form-label {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.profile-sections h6 {
+  letter-spacing: 0.08em;
+}
+
+.address-panel {
+  background: #f8f9fb;
+  border: 1px solid #edf1f7;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.profile-form textarea {
+  resize: none;
+}

@@ -28,6 +28,14 @@ const styles = `
   }
 `;
 
+const createEmptyAddress = () => ({
+  street: '',
+  city: '',
+  state: '',
+  zipCode: '',
+  country: '',
+});
+
 const Employees = () => {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -44,12 +52,24 @@ const Employees = () => {
   
   const currentUser = getUser();
   const canManage = currentUser?.managementLevel >= 2; // L2, L3, and L4 can manage employees
+  const formatAddress = (addressObj) => {
+    if (!addressObj) return 'N/A';
+    const parts = [
+      addressObj.street,
+      addressObj.city,
+      addressObj.state,
+      addressObj.zipCode,
+      addressObj.country,
+    ].filter(Boolean);
+    return parts.length ? parts.join(', ') : 'N/A';
+  };
 
   const [formData, setFormData] = useState({
     employeeId: '',
     firstName: '',
     lastName: '',
     email: '',
+    personalEmail: '',
     password: '',
     phone: '',
     panCard: '',
@@ -77,13 +97,8 @@ const Employees = () => {
       pfNumber: '',
       esiNumber: '',
     },
-    address: {
-      street: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: '',
-    },
+    currentAddress: createEmptyAddress(),
+    permanentAddress: createEmptyAddress(),
   });
 
   useEffect(() => {
@@ -138,6 +153,7 @@ const Employees = () => {
         // Ensure managementLevel is a number
         managementLevel: parseInt(formData.managementLevel) || 0,
       };
+      submitData.address = submitData.currentAddress;
 
       // Remove assetsAllocated from employee data - we'll handle it separately
       const assetToAllocate = submitData.assetsAllocated;
@@ -174,11 +190,14 @@ const Employees = () => {
 
   const handleEdit = (employee) => {
     setEditEmployee(employee);
+    const safeCurrentAddress = { ...(employee.currentAddress || employee.address || createEmptyAddress()) };
+    const safePermanentAddress = { ...(employee.permanentAddress || employee.address || createEmptyAddress()) };
     setFormData({
       employeeId: employee.employeeId,
       firstName: employee.firstName,
       lastName: employee.lastName,
       email: employee.email,
+      personalEmail: employee.personalEmail || '',
       password: '',
       phone: employee.phone || '',
       panCard: employee.panCard || '',
@@ -196,7 +215,8 @@ const Employees = () => {
       salary: canViewSensitiveData ? (employee.salary || { grossSalary: '' }) : { grossSalary: '' },
       bankDetails: canViewSensitiveData ? (employee.bankDetails || { accountNumber: '', bankName: '', ifscCode: '' }) : { accountNumber: '', bankName: '', ifscCode: '' },
       complianceDetails: canViewSensitiveData ? (employee.complianceDetails || { uanNumber: '', pfNumber: '', esiNumber: '' }) : { uanNumber: '', pfNumber: '', esiNumber: '' },
-      address: employee.address || { street: '', city: '', state: '', zipCode: '', country: '' },
+      currentAddress: safeCurrentAddress,
+      permanentAddress: safePermanentAddress,
       assetsAllocated: '',
     });
     setShowModal(true);
@@ -252,6 +272,7 @@ const Employees = () => {
       firstName: '',
       lastName: '',
       email: '',
+      personalEmail: '',
       password: '',
       phone: '',
       panCard: '',
@@ -266,7 +287,8 @@ const Employees = () => {
       dateOfBirth: '',
       joiningDate: new Date().toISOString().split('T')[0],
       salary: { basic: 0, allowances: 0, deductions: 0 },
-      address: { street: '', city: '', state: '', zipCode: '', country: '' },
+      currentAddress: createEmptyAddress(),
+      permanentAddress: createEmptyAddress(),
       assetsAllocated: '',
     });
   };
@@ -275,6 +297,7 @@ const Employees = () => {
     const matchesSearch = emp.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          emp.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          emp.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         emp.personalEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          emp.employeeId?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = !filterDept || emp.department?._id === filterDept;
     const matchesRole = !filterRole || emp.role === filterRole;
@@ -367,7 +390,7 @@ const Employees = () => {
                 <tr>
                   <th>Employee ID</th>
                   <th>Name</th>
-                  <th>Email</th>
+                  <th>Work Email</th>
                   <th>Department</th>
                   <th>Position</th>
                   <th>Level</th>
@@ -396,7 +419,7 @@ const Employees = () => {
                         <span>{employee.firstName} {employee.lastName}</span>
                       </div>
                     </td>
-                    <td data-label="Email">{employee.email}</td>
+                    <td data-label="Work Email">{employee.email}</td>
                     <td data-label="Department">{employee.department?.name || 'N/A'}</td>
                     <td data-label="Position">{employee.position || 'N/A'}</td>
                     <td data-label="Level">
@@ -602,7 +625,7 @@ const Employees = () => {
                       />
                     </div>
                     <div className="col-md-4">
-                      <label className="form-label">Email *</label>
+                      <label className="form-label">Work Email *</label>
                       <input
                         type="email"
                         className="form-control form-control-sm"
@@ -610,6 +633,17 @@ const Employees = () => {
                         value={formData.email}
                         onChange={(e) => setFormData({...formData, email: e.target.value})}
                       />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">Personal Email</label>
+                      <input
+                        type="email"
+                        className="form-control form-control-sm"
+                        value={formData.personalEmail}
+                        onChange={(e) => setFormData({...formData, personalEmail: e.target.value})}
+                        placeholder="Enter personal email"
+                      />
+                      <small className="text-muted">Optional contact email</small>
                     </div>
                     <div className="col-md-4">
                       <label className="form-label">Phone</label>
@@ -684,6 +718,137 @@ const Employees = () => {
                         </div>
                       </>
                     )}
+
+                    {/* Address Details */}
+                    <div className="col-12 mt-3">
+                      <h6 className="fw-bold text-primary border-bottom pb-2">Current Address</h6>
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label">Street Address</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={formData.currentAddress.street}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          currentAddress: { ...formData.currentAddress, street: e.target.value }
+                        })}
+                        placeholder="Enter street address"
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">City</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={formData.currentAddress.city}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          currentAddress: { ...formData.currentAddress, city: e.target.value }
+                        })}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">State</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={formData.currentAddress.state}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          currentAddress: { ...formData.currentAddress, state: e.target.value }
+                        })}
+                      />
+                    </div>
+                    <div className="col-md-2">
+                      <label className="form-label">Zip Code</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={formData.currentAddress.zipCode}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          currentAddress: { ...formData.currentAddress, zipCode: e.target.value }
+                        })}
+                      />
+                    </div>
+                    <div className="col-md-2">
+                      <label className="form-label">Country</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={formData.currentAddress.country}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          currentAddress: { ...formData.currentAddress, country: e.target.value }
+                        })}
+                      />
+                    </div>
+
+                    <div className="col-12 mt-3">
+                      <h6 className="fw-bold text-primary border-bottom pb-2">Permanent Address</h6>
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label">Street Address</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={formData.permanentAddress.street}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          permanentAddress: { ...formData.permanentAddress, street: e.target.value }
+                        })}
+                        placeholder="Enter street address"
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">City</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={formData.permanentAddress.city}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          permanentAddress: { ...formData.permanentAddress, city: e.target.value }
+                        })}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">State</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={formData.permanentAddress.state}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          permanentAddress: { ...formData.permanentAddress, state: e.target.value }
+                        })}
+                      />
+                    </div>
+                    <div className="col-md-2">
+                      <label className="form-label">Zip Code</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={formData.permanentAddress.zipCode}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          permanentAddress: { ...formData.permanentAddress, zipCode: e.target.value }
+                        })}
+                      />
+                    </div>
+                    <div className="col-md-2">
+                      <label className="form-label">Country</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={formData.permanentAddress.country}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          permanentAddress: { ...formData.permanentAddress, country: e.target.value }
+                        })}
+                      />
+                    </div>
 
                     {/* Organization Details */}
                     <div className="col-12 mt-3">
@@ -1027,8 +1192,12 @@ const Employees = () => {
                             <p className="mb-2 small fw-bold">{viewEmployee.employeeId}</p>
                           </div>
                           <div className="col-6">
-                            <label className="text-muted" style={{ fontSize: '0.75rem' }}>Email</label>
+                            <label className="text-muted" style={{ fontSize: '0.75rem' }}>Work Email</label>
                             <p className="mb-2 small">{viewEmployee.email}</p>
+                          </div>
+                          <div className="col-6">
+                            <label className="text-muted" style={{ fontSize: '0.75rem' }}>Personal Email</label>
+                            <p className="mb-2 small">{viewEmployee.personalEmail || 'N/A'}</p>
                           </div>
                           <div className="col-6">
                             <label className="text-muted" style={{ fontSize: '0.75rem' }}>Phone</label>
@@ -1265,22 +1434,27 @@ const Employees = () => {
                   )}
 
                   {/* Address - Full Width Compact */}
-                  {viewEmployee.address && (
+                  {(viewEmployee.currentAddress || viewEmployee.permanentAddress || viewEmployee.address) && (
                     <div className="col-12">
                       <div className="card border-0 bg-light">
                         <div className="card-body p-3">
                           <h6 className="fw-bold text-primary mb-2 small">
-                            <i className="bi bi-geo-alt me-1"></i>Address
+                            <i className="bi bi-geo-alt me-1"></i>Address Information
                           </h6>
-                          <p className="mb-0 small">
-                            {[
-                              viewEmployee.address.street,
-                              viewEmployee.address.city,
-                              viewEmployee.address.state,
-                              viewEmployee.address.zipCode,
-                              viewEmployee.address.country
-                            ].filter(Boolean).join(', ') || 'N/A'}
-                          </p>
+                          <div className="row g-3">
+                            <div className="col-md-6">
+                              <label className="text-muted" style={{ fontSize: '0.75rem' }}>Current Address</label>
+                              <p className="mb-0 small">
+                                {formatAddress(viewEmployee.currentAddress || viewEmployee.address)}
+                              </p>
+                            </div>
+                            <div className="col-md-6">
+                              <label className="text-muted" style={{ fontSize: '0.75rem' }}>Permanent Address</label>
+                              <p className="mb-0 small">
+                                {formatAddress(viewEmployee.permanentAddress || viewEmployee.currentAddress || viewEmployee.address)}
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>

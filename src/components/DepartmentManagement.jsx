@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { getUser } from '../services/api';
 import './DepartmentManagement.css';
 
@@ -71,11 +71,82 @@ const DepartmentManagement = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    positions: []
+    positions: [],
+    parentDepartment: ''
   });
 
   const currentUser = getUser();
   const canManage = currentUser?.managementLevel >= 3; // Only L3 (Admin) can manage departments
+
+  const departmentMap = useMemo(() => {
+    const map = new Map();
+    departments.forEach((dept) => {
+      map.set(dept._id, dept);
+    });
+    return map;
+  }, [departments]);
+
+  const getParentId = (dept) => {
+    if (!dept) return null;
+    const parent = dept.parentDepartment;
+    if (!parent) return null;
+    return typeof parent === 'string' ? parent : parent._id;
+  };
+
+  const getParentName = (dept) => {
+    if (!dept || !dept.parentDepartment) return '';
+    if (typeof dept.parentDepartment === 'string') {
+      return departmentMap.get(dept.parentDepartment)?.name || 'Parent';
+    }
+    return dept.parentDepartment.name || 'Parent';
+  };
+
+  const isInvalidParent = (candidateId) => {
+    if (!editingDepartment) return false;
+    if (!candidateId) return false;
+    if (candidateId === editingDepartment._id) return true;
+
+    let current = departmentMap.get(candidateId);
+    while (current) {
+      const parentId = getParentId(current);
+      if (!parentId) break;
+      if (parentId === editingDepartment._id) {
+        return true;
+      }
+      current = departmentMap.get(parentId);
+    }
+    return false;
+  };
+
+  const parentSelectOptions = useMemo(() => {
+    return departments.filter((dept) => !isInvalidParent(dept._id));
+  }, [departments, editingDepartment]);
+
+  const hierarchicalDepartments = useMemo(() => {
+    const map = new Map();
+    departments.forEach((dept) => {
+      map.set(dept._id, { ...dept, children: [] });
+    });
+
+    const roots = [];
+    map.forEach((dept) => {
+      const parentId = getParentId(dept);
+      if (parentId && map.has(parentId)) {
+        map.get(parentId).children.push(dept);
+      } else {
+        roots.push(dept);
+      }
+    });
+
+    const ordered = [];
+    const traverse = (dept, depth = 0) => {
+      ordered.push({ ...dept, depth });
+      dept.children.forEach((child) => traverse(child, depth + 1));
+    };
+
+    roots.forEach((dept) => traverse(dept));
+    return ordered;
+  }, [departments]);
 
   useEffect(() => {
     fetchDepartments();
@@ -99,11 +170,12 @@ const DepartmentManagement = () => {
       setFormData({
         name: department.name,
         description: department.description || '',
-        positions: department.positions || []
+        positions: department.positions || [],
+        parentDepartment: department.parentDepartment?._id || department.parentDepartment || ''
       });
     } else {
       setEditingDepartment(null);
-      setFormData({ name: '', description: '', positions: [] });
+      setFormData({ name: '', description: '', positions: [], parentDepartment: '' });
     }
     setNewPosition('');
     setShowModal(true);
@@ -112,7 +184,7 @@ const DepartmentManagement = () => {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingDepartment(null);
-    setFormData({ name: '', description: '', positions: [] });
+    setFormData({ name: '', description: '', positions: [], parentDepartment: '' });
     setNewPosition('');
   };
 
@@ -146,11 +218,16 @@ const DepartmentManagement = () => {
     }
 
     try {
+      const payload = {
+        ...formData,
+        parentDepartment: formData.parentDepartment || null,
+      };
+
       if (editingDepartment) {
-        await departmentAPI.update(editingDepartment._id, formData);
+        await departmentAPI.update(editingDepartment._id, payload);
         alert('Department updated successfully!');
       } else {
-        await departmentAPI.create(formData);
+        await departmentAPI.create(payload);
         alert('Department created successfully!');
       }
       handleCloseModal();
@@ -258,16 +335,24 @@ const DepartmentManagement = () => {
 
       {/* Departments List */}
       <div className="row">
-        {departments.length === 0 ? (
+        {hierarchicalDepartments.length === 0 ? (
           <div className="col-12 text-center py-5 text-muted">
             <i className="bi bi-building fs-1 d-block mb-2"></i>
             <p>No departments found. Create your first department to get started!</p>
           </div>
         ) : (
-          departments.map(department => (
-            <div key={department._id} className="col-md-6 col-lg-4 mb-4">
-              <div className="card border-0 shadow-sm h-100 department-card">
-                <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+          hierarchicalDepartments.map(department => {
+            const depthIndent = department.depth ? Math.min(department.depth * 16, 48) : 0;
+            return (
+              <div key={department._id} className="col-12 col-lg-6 col-xxl-4 mb-4">
+                <div
+                  className="card border-0 shadow-sm h-100 department-card"
+                  style={{
+                    marginLeft: depthIndent,
+                    borderLeft: department.depth ? '4px solid var(--accent, #2563eb)' : undefined,
+                  }}
+                >
+                  <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                   <h6 className="mb-0">
                     <i className="bi bi-building me-2"></i>
                     {department.name}
@@ -277,6 +362,13 @@ const DepartmentManagement = () => {
                   </span>
                 </div>
                 <div className="card-body">
+                  {department.parentDepartment && (
+                    <div className="mb-2">
+                      <span className="badge bg-light text-dark">
+                        Sub of {getParentName(department)}
+                      </span>
+                    </div>
+                  )}
                   {department.description && (
                     <p className="text-muted mb-3">{department.description}</p>
                   )}
@@ -300,11 +392,30 @@ const DepartmentManagement = () => {
                   </div>
 
                   <div className="mb-3">
-                    <small className="text-muted">
+                    <small className="text-muted me-3">
                       <i className="bi bi-people me-1"></i>
                       {department.employees?.length || 0} Employees
                     </small>
+                    {department.childCount > 0 && (
+                      <small className="text-muted">
+                        <i className="bi bi-diagram-3 me-1"></i>
+                        {department.childCount} Sub-department{department.childCount > 1 ? 's' : ''}
+                      </small>
+                    )}
                   </div>
+
+                  {department.children?.length > 0 && (
+                    <div className="mb-3">
+                      <small className="text-muted d-block mb-1">Nested Departments</small>
+                      <div className="d-flex flex-wrap gap-1">
+                        {department.children.map((child) => (
+                          <span key={child._id} className="badge bg-secondary-subtle text-dark">
+                            {child.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {canManage && (
                     <div className="d-flex gap-2">
@@ -325,7 +436,8 @@ const DepartmentManagement = () => {
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -370,6 +482,26 @@ const DepartmentManagement = () => {
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       placeholder="Brief description of the department"
                     ></textarea>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">
+                      <i className="bi bi-diagram-3 me-2"></i>Parent Department
+                    </label>
+                    <select
+                      className="form-select"
+                      value={formData.parentDepartment}
+                      onChange={(e) => setFormData({ ...formData, parentDepartment: e.target.value })}
+                    >
+                      <option value="">None (Top-level)</option>
+                      {parentSelectOptions.map((dept) => (
+                        <option key={dept._id} value={dept._id}>
+                          {dept.name}
+                          {dept.parentDepartment ? ` • Sub of ${getParentName(dept)}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <small className="text-muted">Assigning a parent creates a nested department hierarchy.</small>
                   </div>
 
                   <div className="mb-3">

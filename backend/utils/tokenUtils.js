@@ -27,6 +27,9 @@ export const sendTokenResponse = (user, statusCode, res) => {
       profileImage: user.profileImage,
       canApproveLeaves: user.canApproveLeaves,
       canManageAttendance: user.canManageAttendance,
+      personalEmail: user.personalEmail,
+      currentAddress: user.currentAddress,
+      permanentAddress: user.permanentAddress,
     },
   });
 };

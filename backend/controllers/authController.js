@@ -96,12 +96,73 @@ export const getMe = async (req, res) => {
 // @access  Private
 export const updateProfile = async (req, res) => {
   try {
-    const fieldsToUpdate = {
-      firstName: req.body.firstName,
-      lastName: req.body.lastName,
-      phone: req.body.phone,
-      address: req.body.address,
+    const sanitizeString = (value) => {
+      if (typeof value !== 'string') return value;
+      const trimmed = value.trim();
+      return trimmed.length ? trimmed : undefined;
     };
+
+    const sanitizeAddress = (address = {}) => {
+      if (!address || typeof address !== 'object') return undefined;
+      const sanitized = {};
+      ['street', 'city', 'state', 'zipCode', 'country'].forEach((field) => {
+        const value = sanitizeString(address[field]);
+        if (value !== undefined) {
+          sanitized[field] = value;
+        }
+      });
+      return Object.keys(sanitized).length ? sanitized : undefined;
+    };
+
+    const sanitizeNested = (source = {}, allowedFields = []) => {
+      if (!source || typeof source !== 'object') return undefined;
+      const sanitized = {};
+      allowedFields.forEach((field) => {
+        const value = sanitizeString(source[field]) ?? source[field];
+        if (value !== undefined && value !== null && value !== '') {
+          sanitized[field] = value;
+        }
+      });
+      return Object.keys(sanitized).length ? sanitized : undefined;
+    };
+
+    const currentAddressInput = req.body.currentAddress || req.body.address;
+    const permanentAddressInput = req.body.permanentAddress || req.body.currentAddress || req.body.address;
+    const fieldsToUpdate = {};
+
+    const setIfDefined = (key, value) => {
+      const sanitizedValue = sanitizeString(value);
+      if (sanitizedValue !== undefined) {
+        fieldsToUpdate[key] = sanitizedValue;
+      }
+    };
+
+    setIfDefined('phone', req.body.phone);
+    setIfDefined('personalEmail', req.body.personalEmail);
+    setIfDefined('dateOfBirth', req.body.dateOfBirth);
+    setIfDefined('panCard', req.body.panCard);
+    setIfDefined('aadharCard', req.body.aadharCard);
+
+    const sanitizedBankDetails = sanitizeNested(req.body.bankDetails, ['accountNumber', 'bankName', 'ifscCode']);
+    if (sanitizedBankDetails) {
+      fieldsToUpdate.bankDetails = sanitizedBankDetails;
+    }
+
+    const sanitizedComplianceDetails = sanitizeNested(req.body.complianceDetails, ['uanNumber', 'pfNumber', 'esiNumber']);
+    if (sanitizedComplianceDetails) {
+      fieldsToUpdate.complianceDetails = sanitizedComplianceDetails;
+    }
+
+    const sanitizedCurrentAddress = sanitizeAddress(currentAddressInput);
+    if (sanitizedCurrentAddress) {
+      fieldsToUpdate.currentAddress = sanitizedCurrentAddress;
+      fieldsToUpdate.address = sanitizedCurrentAddress; // maintain backward compatibility
+    }
+
+    const sanitizedPermanentAddress = sanitizeAddress(permanentAddressInput);
+    if (sanitizedPermanentAddress) {
+      fieldsToUpdate.permanentAddress = sanitizedPermanentAddress;
+    }
 
     const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
       new: true,
