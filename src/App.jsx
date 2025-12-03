@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Sidebar from "./components/SideBar";
 import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
-import "/src/App.css";
+import "./App.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import Event2 from "./components/Events2";
 import Event1 from "./components/Event1";
@@ -67,9 +67,9 @@ function App() {
         path="/*"
         element={
           <ProtectedRoute>
-            <div className="d-flex" style={{ height: "100vh", width: "100vw", overflow: "hidden" }}>
+            <div className="app-shell d-flex">
               <Sidebar />
-              <div className="flex-grow-1 p-4" style={{ overflowY: "auto", overflowX: "hidden", width: "calc(100% - 250px)" }}>
+              <div className="app-shell__content flex-grow-1 p-4">
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/event" element={<Event1 />} />

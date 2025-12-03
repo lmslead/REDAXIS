@@ -25,7 +25,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import logo from "../assets/Logo.png";
 import userImg from "../assets/client.jpg";
 import { authAPI, getUser } from "../services/api";
-import "/src/App.css";
+import "../App.css";
 
 const SideBar = () => {
   const navigate = useNavigate();
