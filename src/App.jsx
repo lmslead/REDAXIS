@@ -23,6 +23,8 @@ import Assets from "./components/Assets";
 import Resignation from "./components/Resignation";
 import { getToken, authAPI } from "./services/api";
 
+const MOBILE_BREAKPOINT = 992;
+
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const token = getToken();
@@ -30,11 +32,50 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function App() {
+  const getIsMobile = () =>
+    typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false;
+
   const [loading, setLoading] = useState(true);
+  const [isMobileView, setIsMobileView] = useState(getIsMobile);
+  const [sidebarOpen, setSidebarOpen] = useState(() => !getIsMobile());
 
   useEffect(() => {
     checkAuth();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleResize = () => {
+      setIsMobileView(getIsMobile());
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    setSidebarOpen(!isMobileView);
+  }, [isMobileView]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (!isMobileView) {
+      document.body.style.overflow = "";
+      return;
+    }
+
+    document.body.style.overflow = sidebarOpen ? "hidden" : "";
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isMobileView, sidebarOpen]);
 
   const checkAuth = async () => {
     const token = getToken();
@@ -68,8 +109,28 @@ function App() {
         element={
           <ProtectedRoute>
             <div className="app-shell d-flex">
-              <Sidebar />
+              <Sidebar
+                isMobile={isMobileView}
+                isOpen={sidebarOpen}
+                onClose={() => setSidebarOpen(false)}
+              />
+              {isMobileView && sidebarOpen && (
+                <div
+                  className="sidebar-overlay"
+                  onClick={() => setSidebarOpen(false)}
+                ></div>
+              )}
               <div className="app-shell__content flex-grow-1 p-4">
+                {isMobileView && (
+                  <button
+                    type="button"
+                    className="sidebar-toggle btn btn-light shadow-sm mb-3"
+                    onClick={() => setSidebarOpen(true)}
+                  >
+                    <span className="sidebar-toggle__icon" />
+                    Menu
+                  </button>
+                )}
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/event" element={<Event1 />} />

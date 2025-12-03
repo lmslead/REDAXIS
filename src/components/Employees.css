@@ -1,0 +1,136 @@
+.employees-page {
+  padding-bottom: 2rem;
+}
+
+.employees-table-wrapper {
+  border-radius: 20px;
+}
+
+.employees-table {
+  min-width: 960px;
+}
+
+.employees-table thead th {
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted, #64748b);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.employees-table td {
+  vertical-align: middle;
+}
+
+.employee-actions .btn {
+  min-width: 36px;
+}
+
+@media (max-width: 1200px) {
+  .employees-table {
+    min-width: 100%;
+  }
+
+  .employees-page .card-body {
+    padding: 1.25rem;
+  }
+}
+
+@media (max-width: 992px) {
+  .employees-page .row > [class*="col-"] {
+    margin-bottom: 0.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .employees-table-wrapper {
+    overflow: visible;
+  }
+
+  .employees-table {
+    border: 0;
+  }
+
+  .employees-table thead {
+    display: none;
+  }
+
+  .employees-table,
+  .employees-table tbody,
+  .employees-table tr,
+  .employees-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .employees-table tr {
+    margin-bottom: 1.25rem;
+    border-radius: 18px;
+    background: var(--bg-card, #ffffff);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    padding: 1rem 1rem 0.5rem;
+  }
+
+  .employees-table td {
+    border: none;
+    padding: 0.45rem 0 0.45rem 42%;
+    position: relative;
+    font-size: 0.95rem;
+  }
+
+  .employees-table td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 1rem;
+    top: 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-muted, #64748b);
+  }
+
+  .employees-table td[data-label="Name"] {
+    padding-left: 1rem;
+  }
+
+  .employees-table td[data-label="Name"] .d-flex {
+    flex-direction: row;
+    gap: 0.65rem;
+    align-items: center;
+  }
+
+  .employees-table td[data-label="Actions"] {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .employee-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .employee-card-actions .btn {
+    flex: 1 1 45%;
+  }
+}
+
+@media (max-width: 576px) {
+  .employees-table tr {
+    padding: 0.85rem 0.85rem 0.35rem;
+  }
+
+  .employees-table td {
+    padding-left: 38%;
+  }
+
+  .employees-table td::before {
+    left: 0.85rem;
+  }
+
+  .employee-card-actions .btn {
+    flex: 1 1 100%;
+  }
+}

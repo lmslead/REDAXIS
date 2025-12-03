@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { employeesAPI, departmentsAPI, teamAPI, assetsAPI } from '../services/api';
 import { getUser } from '../services/api';
+import './Employees.css';
 
 // CSS to remove number input spinners and fix dropdown issues
 const styles = `
@@ -293,7 +294,7 @@ const Employees = () => {
   return (
     <>
       <style>{styles}</style>
-      <div className="container-fluid py-4">
+      <div className="container-fluid py-4 employees-page">
       <div className="row mb-4">
         <div className="col">
           <h2 className="fw-bold">Employee Management</h2>
@@ -360,8 +361,8 @@ const Employees = () => {
       {/* Employees Table */}
       <div className="card border-0 shadow-sm">
         <div className="card-body">
-          <div className="table-responsive" style={{ overflow: 'visible' }}>
-            <table className="table table-hover">
+          <div className="table-responsive employees-table-wrapper" style={{ overflow: 'visible' }}>
+            <table className="table table-hover align-middle employees-table">
               <thead>
                 <tr>
                   <th>Employee ID</th>
@@ -383,8 +384,8 @@ const Employees = () => {
                     onClick={() => handleView(employee)}
                     title="Click to view details"
                   >
-                    <td className="fw-bold">{employee.employeeId}</td>
-                    <td>
+                    <td className="fw-bold" data-label="Employee ID">{employee.employeeId}</td>
+                    <td data-label="Name">
                       <div className="d-flex align-items-center">
                         <img
                           src={employee.profileImage || '/assets/client.jpg'}
@@ -395,10 +396,10 @@ const Employees = () => {
                         <span>{employee.firstName} {employee.lastName}</span>
                       </div>
                     </td>
-                    <td>{employee.email}</td>
-                    <td>{employee.department?.name || 'N/A'}</td>
-                    <td>{employee.position || 'N/A'}</td>
-                    <td>
+                    <td data-label="Email">{employee.email}</td>
+                    <td data-label="Department">{employee.department?.name || 'N/A'}</td>
+                    <td data-label="Position">{employee.position || 'N/A'}</td>
+                    <td data-label="Level">
                       <span className={`badge ${
                         employee.managementLevel === 4 ? 'bg-dark' :
                         employee.managementLevel === 3 ? 'bg-danger' :
@@ -413,7 +414,7 @@ const Employees = () => {
                         }
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Reporting Manager">
                       {employee.reportingManager ? (
                         <span className="text-muted small">
                           {employee.reportingManager.firstName} {employee.reportingManager.lastName}
@@ -422,7 +423,7 @@ const Employees = () => {
                         <span className="text-muted small">-</span>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Status">
                       <span className={`badge ${
                         employee.status === 'active' ? 'bg-success' :
                         employee.status === 'on-leave' ? 'bg-warning' : 'bg-secondary'
@@ -431,8 +432,12 @@ const Employees = () => {
                       </span>
                     </td>
                     {canManage && (
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div className="d-flex gap-1">
+                      <td
+                        data-label="Actions"
+                        className="employee-actions"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="d-flex gap-1 employee-card-actions">
                           {/* L2 can edit L0/L1 only, L3 can edit up to L2, L4 can edit anyone */}
                           {(currentUser?.managementLevel === 4 ||
                             currentUser?.managementLevel === 3 || 

@@ -16,6 +16,7 @@ import {
   FaChevronUp,
   FaUserFriends,
   FaLaptop,
+  FaTimes,
 } from "react-icons/fa";
 import { BiLogOut } from "react-icons/bi";
 import { MdSpaceDashboard } from "react-icons/md";
@@ -27,7 +28,7 @@ import userImg from "../assets/client.jpg";
 import { authAPI, getUser } from "../services/api";
 import "../App.css";
 
-const SideBar = () => {
+const SideBar = ({ isMobile = false, isOpen = true, onClose = () => {} }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const user = getUser();
@@ -76,13 +77,38 @@ const SideBar = () => {
     { name: "Settings", icon: <FaCog />, path: "/settings" },
   ];
 
+  const handleNavigate = (path) => {
+    navigate(path);
+    if (isMobile) {
+      onClose();
+      setOpenDropdown(null);
+    }
+  };
+
   const handleLogout = () => {
     authAPI.logout();
     navigate('/login');
+    if (isMobile) {
+      onClose();
+    }
   };
 
   return (
-    <div className="sidebar">
+    <div
+      className={`sidebar ${isMobile ? "sidebar--mobile" : ""} ${
+        isMobile && isOpen ? "sidebar--open" : ""
+      }`}
+    >
+      {isMobile && (
+        <button
+          type="button"
+          className="sidebar-close btn btn-link text-white"
+          onClick={onClose}
+          aria-label="Close navigation"
+        >
+          <FaTimes size={18} />
+        </button>
+      )}
       <div className="logo-container">
         <img src={logo} alt="RG Staff Hub" className="logo" />
       </div>
@@ -136,7 +162,7 @@ const SideBar = () => {
                           key={subItem.name}
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(subItem.path);
+                            handleNavigate(subItem.path);
                           }}
                           className={`nav-item ${isSubActive ? "active" : ""}`}
                         >
@@ -156,7 +182,7 @@ const SideBar = () => {
           return (
             <li
               key={item.name}
-              onClick={() => navigate(item.path)}
+              onClick={() => handleNavigate(item.path)}
               className={`nav-item ${isActive ? "active" : ""}`}
             >
               <span className="icon">{item.icon}</span>
