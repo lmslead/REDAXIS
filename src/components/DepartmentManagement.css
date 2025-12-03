@@ -54,3 +54,41 @@
   font-weight: 500;
   padding: 0.35em 0.65em;
 }
+
+.department-modal .input-group {
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  align-items: stretch;
+}
+
+.department-modal .input-group .form-control {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  flex: 1;
+}
+
+.department-modal .input-group .btn {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 576px) {
+  .department-modal .input-group {
+    flex-direction: column;
+  }
+
+  .department-modal .input-group .form-control,
+  .department-modal .input-group .btn {
+    border-radius: 10px;
+  }
+
+  .department-modal .input-group .btn {
+    margin-top: 0.5rem;
+  }
+}
