@@ -25,9 +25,14 @@ export const removeUser = () => localStorage.removeItem('user');
 const apiRequest = async (endpoint, options = {}) => {
   const token = getToken();
   const headers = {
-    'Content-Type': 'application/json',
     ...options.headers,
   };
+
+  const isFormData = options.body instanceof FormData;
+
+  if (!isFormData && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -270,6 +275,54 @@ export const payrollAPI = {
   process: (id) => apiRequest(`/payroll/${id}/process`, { method: 'POST' }),
 };
 
+// Payslips API
+export const payslipsAPI = {
+  getAll: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiRequest(`/payslips${queryString ? `?${queryString}` : ''}`);
+  },
+  upload: ({ employeeId, month, year, file, remarks }) => {
+    const formData = new FormData();
+    formData.append('employeeId', employeeId);
+    formData.append('month', month);
+    formData.append('year', year);
+    if (remarks) {
+      formData.append('remarks', remarks);
+    }
+    formData.append('payslip', file);
+
+    return apiRequest('/payslips', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  download: async (id) => {
+    const token = getToken();
+    const response = await fetch(`${API_BASE_URL}/payslips/${id}/download`, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      let errorMessage = 'Failed to download payslip';
+      try {
+        if (contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData?.message || errorMessage;
+        } else {
+          errorMessage = await response.text() || errorMessage;
+        }
+      } catch (parseError) {
+        console.error('Payslip download parse error:', parseError);
+      }
+      throw new Error(errorMessage);
+    }
+
+    return response.blob();
+  },
+};
+
 // Team API (Reporting Manager Features)
 export const teamAPI = {
   // Get all team members reporting to the current manager
@@ -341,6 +394,7 @@ export default {
   leave: leaveAPI,
   departments: departmentsAPI,
   payroll: payrollAPI,
+  payslips: payslipsAPI,
   team: teamAPI,
   assets: assetsAPI,
 };

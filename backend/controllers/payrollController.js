@@ -11,7 +11,11 @@ export const getPayrolls = async (req, res) => {
     if (status) query.status = status;
 
     const payrolls = await Payroll.find(query)
-      .populate('employee', 'firstName lastName employeeId email')
+      .populate({
+        path: 'employee',
+        select: 'firstName lastName employeeId email department position',
+        populate: { path: 'department', select: 'name' },
+      })
       .sort({ year: -1, month: -1 });
 
     res.status(200).json({ success: true, count: payrolls.length, data: payrolls });
@@ -23,7 +27,11 @@ export const getPayrolls = async (req, res) => {
 export const getPayroll = async (req, res) => {
   try {
     const payroll = await Payroll.findById(req.params.id)
-      .populate('employee', 'firstName lastName employeeId email department position');
+      .populate({
+        path: 'employee',
+        select: 'firstName lastName employeeId email department position',
+        populate: { path: 'department', select: 'name' },
+      });
 
     if (!payroll) {
       return res.status(404).json({ success: false, message: 'Payroll not found' });
@@ -87,6 +95,11 @@ export const processPayroll = async (req, res) => {
 
     payroll.status = 'processed';
     await payroll.save();
+    await payroll.populate({
+      path: 'employee',
+      select: 'firstName lastName employeeId email department position',
+      populate: { path: 'department', select: 'name' },
+    });
 
     res.status(200).json({ success: true, data: payroll });
   } catch (error) {
