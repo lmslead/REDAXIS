@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf';
-import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.js?url';
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/build/pdf';
+import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.js?url';
 import { payrollAPI, payslipsAPI, employeesAPI, getUser } from '../services/api';
 import './Payroll.css';
 
