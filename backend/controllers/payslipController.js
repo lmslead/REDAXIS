@@ -55,31 +55,6 @@ const ensureDirectoryExists = async (targetPath) => {
       });
       throw new Error('Unable to prepare target folder for payslip upload');
     }
-
-      const readPayslipBuffer = async (filePath, compression) => {
-        const rawBuffer = await fs.promises.readFile(filePath);
-        if (!compression) {
-          return rawBuffer;
-        }
-
-        if (compression === 'gzip') {
-          try {
-            return await decompressFromGzip(rawBuffer);
-          } catch (error) {
-            console.warn('Payslip gzip decompression failed, serving raw buffer instead', {
-              path: filePath,
-              message: error.message,
-            });
-            return rawBuffer;
-          }
-        }
-
-        console.warn('Unsupported payslip compression marker. Serving raw buffer.', {
-          path: filePath,
-          compression,
-        });
-        return rawBuffer;
-      };
   }
 };
 
@@ -106,6 +81,31 @@ const decompressFromGzip = (buffer) => new Promise((resolve, reject) => {
     return resolve(result);
   });
 });
+
+const readPayslipBuffer = async (filePath, compression) => {
+  const rawBuffer = await fs.promises.readFile(filePath);
+  if (!compression) {
+    return rawBuffer;
+  }
+
+  if (compression === 'gzip') {
+    try {
+      return await decompressFromGzip(rawBuffer);
+    } catch (error) {
+      console.warn('Payslip gzip decompression failed, serving raw buffer instead', {
+        path: filePath,
+        message: error.message,
+      });
+      return rawBuffer;
+    }
+  }
+
+  console.warn('Unsupported payslip compression marker. Serving raw buffer.', {
+    path: filePath,
+    compression,
+  });
+  return rawBuffer;
+};
 
 const formatPeriodFolder = (year, month) => `${year}_${String(month).padStart(2, '0')}`;
 
