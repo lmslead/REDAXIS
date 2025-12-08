@@ -1,14 +1,10 @@
 import { useState, useEffect } from 'react';
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/build/pdf';
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf';
+import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.js?url';
 import { payrollAPI, payslipsAPI, employeesAPI, getUser } from '../services/api';
 import './Payroll.css';
 
-const PDFJS_WORKER_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js';
-const resolvedPdfWorkerSrc = import.meta.env.DEV
-  ? new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
-  : PDFJS_WORKER_CDN;
-
-GlobalWorkerOptions.workerSrc = resolvedPdfWorkerSrc;
+GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
 
 const FINANCE_DEPARTMENT_NAMES = (import.meta.env.VITE_FINANCE_DEPARTMENTS || 'Finance')
   .split(',')
