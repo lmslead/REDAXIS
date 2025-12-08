@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/build/pdf';
-import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.js?url';
 import { payrollAPI, payslipsAPI, employeesAPI, getUser } from '../services/api';
 import './Payroll.css';
 
-GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 const FINANCE_DEPARTMENT_NAMES = (import.meta.env.VITE_FINANCE_DEPARTMENTS || 'Finance')
   .split(',')
