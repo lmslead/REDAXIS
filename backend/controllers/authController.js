@@ -26,6 +26,7 @@ export const register = async (req, res) => {
       department,
       position,
     });
+    await user.populate('department', 'name code');
 
     sendTokenResponse(user, 201, res);
   } catch (error) {
@@ -46,7 +47,9 @@ export const login = async (req, res) => {
     }
 
     // Check for user
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email })
+      .select('+password')
+      .populate('department', 'name code');
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -167,7 +170,8 @@ export const updateProfile = async (req, res) => {
     const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
       new: true,
       runValidators: true,
-    });
+    })
+      .populate('department', 'name code');
 
     res.status(200).json({
       success: true,

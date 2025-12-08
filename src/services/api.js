@@ -223,6 +223,18 @@ export const attendanceAPI = {
     return apiRequest(`/attendance/stats?${queryString}`);
   },
   getLocationConfig: () => apiRequest('/attendance/location-config'),
+  syncDeviceLogs: (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.entries(params).reduce((acc, [key, val]) => {
+        if (val === undefined || val === null || val === '') return acc;
+        acc[key] = val;
+        return acc;
+      }, {})
+    ).toString();
+    return apiRequest(`/attendance/sync-device${queryString ? `?${queryString}` : ''}`, {
+      method: 'POST'
+    });
+  },
 };
 
 // Leave API

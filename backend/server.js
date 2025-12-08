@@ -22,6 +22,7 @@ import resignationRoutes from './routes/resignationRoutes.js';
 
 // Import utilities
 import { setupEscalationCron } from './utils/escalationService.js';
+import { startBiometricSyncScheduler } from './utils/biometricSyncService.js';
 
 // Load environment variables
 dotenv.config();
@@ -47,6 +48,7 @@ mongoose
     console.log('✅ MongoDB connected successfully');
     // Start escalation cron job after DB connection
     setupEscalationCron();
+    startBiometricSyncScheduler();
   })
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 

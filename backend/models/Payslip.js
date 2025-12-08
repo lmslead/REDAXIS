@@ -25,6 +25,11 @@ const payslipSchema = new mongoose.Schema({
     required: true,
   },
   fileSize: Number,
+  storedFileSize: Number,
+  compression: {
+    type: String,
+    enum: ['gzip'],
+  },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

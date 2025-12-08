@@ -52,6 +52,8 @@ const syncLeaveToAttendance = async (leave) => {
         // Update existing record - use 'half-day' status for half-day leaves, 'on-leave' for others
         existingAttendance.status = leave.leaveType === 'half-day' ? 'half-day' : 'on-leave';
         existingAttendance.notes = `${leave.leaveType.charAt(0).toUpperCase() + leave.leaveType.slice(1)} Leave`;
+        existingAttendance.source = 'leave';
+        existingAttendance.deviceSyncMeta = undefined;
         await existingAttendance.save();
         attendanceRecords.push(existingAttendance);
       } else {
@@ -61,7 +63,8 @@ const syncLeaveToAttendance = async (leave) => {
           date: dateToCreate,
           status: leave.leaveType === 'half-day' ? 'half-day' : 'on-leave',
           notes: `${leave.leaveType.charAt(0).toUpperCase() + leave.leaveType.slice(1)} Leave`,
-          workingHours: leave.leaveType === 'half-day' ? 4 : 0
+          workingHours: leave.leaveType === 'half-day' ? 4 : 0,
+          source: 'leave'
         };
         
         const attendance = await Attendance.create(attendanceData);
@@ -92,7 +95,11 @@ const removeLeaveFromAttendance = async (leave) => {
     const result = await Attendance.deleteMany({
       employee: leave.employee,
       date: { $gte: startDate, $lte: endDate },
-      status: { $in: ['on-leave', 'half-day'] }
+      status: { $in: ['on-leave', 'half-day'] },
+      $or: [
+        { source: 'leave' },
+        { source: { $exists: false } }
+      ]
     });
     
     console.log(`✅ Removed ${result.deletedCount} leave attendance records for leave ${leave._id}`);

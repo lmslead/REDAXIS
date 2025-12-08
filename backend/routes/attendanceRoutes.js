@@ -7,6 +7,7 @@ import {
   updateAttendance,
   getAttendanceStats,
   getLocationConfig,
+  syncDeviceAttendance,
 } from '../controllers/attendanceController.js';
 import { protect, authorizeLevel } from '../middleware/auth.js';
 
@@ -25,5 +26,6 @@ router.put('/:id', protect, authorizeLevel(1), updateAttendance);
 // Everyone can check in/out
 router.post('/check-in', protect, checkIn);
 router.post('/check-out', protect, checkOut);
+router.post('/sync-device', protect, authorizeLevel(2), syncDeviceAttendance);
 
 export default router;

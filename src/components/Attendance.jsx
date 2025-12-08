@@ -5,6 +5,8 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import './Attendance.css';
 
+const FULL_SYNC_LOOKBACK_DAYS = 7;
+
 const Attendance = () => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,8 @@ const Attendance = () => {
   const [filterType, setFilterType] = useState('month'); // 'month' or 'date'
   const [specificDate, setSpecificDate] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [deviceSyncing, setDeviceSyncing] = useState(false);
+  const [fullSyncing, setFullSyncing] = useState(false);
   const [locationConfig, setLocationConfig] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState('');
@@ -26,6 +30,7 @@ const Attendance = () => {
   const currentUser = getUser();
   console.log('🔍 Current user from localStorage:', currentUser);
   const canManage = currentUser?.managementLevel >= 1; // L1, L2, L3 can manage team attendance
+  const canTriggerDeviceSync = currentUser?.managementLevel >= 2; // L2+ can manually sync devices
 
   useEffect(() => {
     // Fetch employees if admin/HR
@@ -407,6 +412,25 @@ const Attendance = () => {
     }
   };
 
+  const buildSyncSummaryMessage = (title, result) => {
+    const processed = result?.processedRecords ?? 0;
+    const created = result?.createdRecords ?? 0;
+    const updated = result?.updatedRecords ?? 0;
+    const skipped = result?.skippedRecords ?? 0;
+    const leaveLocked = result?.leaveLocked ?? 0;
+    const effectiveSince = result?.effectiveSince
+      ? `\nSince: ${new Date(result.effectiveSince).toLocaleString()}`
+      : '';
+    const skippedDetails = Array.isArray(result?.skippedDetails) && result.skippedDetails.length
+      ? `\nUnmatched Emp Codes (sample):\n${result.skippedDetails
+          .slice(0, 5)
+          .map((item, idx) => `${idx + 1}. ${item.empCode || 'N/A'} (${item.reason || 'unknown'})`)
+          .join('\n')}`
+      : '';
+
+    return `${title}\nProcessed: ${processed}\nCreated: ${created}\nUpdated: ${updated}\nSkipped: ${skipped}\nLeave-Locked: ${leaveLocked}${effectiveSince}${skippedDetails}`;
+  };
+
   const handleSyncLeaves = async () => {
     if (!canManage) {
       alert('Only Admin and HR can sync leaves');
@@ -435,6 +459,72 @@ const Attendance = () => {
       alert(`❌ Failed to sync leaves: ${error.message}`);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSyncDeviceLogs = async () => {
+    if (!canTriggerDeviceSync) {
+      alert('Only L2+ users can sync device logs');
+      return;
+    }
+
+    try {
+      setDeviceSyncing(true);
+      console.log('🔄 Starting device attendance sync...');
+
+      const response = await attendanceAPI.syncDeviceLogs();
+      console.log('✅ Device sync response:', response);
+
+      const result = response.data || response;
+      alert(buildSyncSummaryMessage('Device sync completed.', result));
+
+      await fetchAttendance();
+      await fetchStats();
+      await checkTodayStatus();
+    } catch (error) {
+      console.error('❌ Error syncing device logs:', error);
+      alert(`❌ Failed to sync device logs: ${error.message}`);
+    } finally {
+      setDeviceSyncing(false);
+    }
+  };
+
+  const handleFullSyncDeviceLogs = async () => {
+    if (!canTriggerDeviceSync) {
+      alert('Only L2+ users can sync device logs');
+      return;
+    }
+
+    const confirmFullSync = window.confirm(
+      `This will re-sync the last ${FULL_SYNC_LOOKBACK_DAYS} days of device logs. This may take a few minutes. Continue?`
+    );
+
+    if (!confirmFullSync) {
+      return;
+    }
+
+    try {
+      setFullSyncing(true);
+      console.log('🔄 Starting full device attendance sync...');
+
+      const response = await attendanceAPI.syncDeviceLogs({
+        mode: 'full',
+        days: FULL_SYNC_LOOKBACK_DAYS,
+      });
+
+      console.log('✅ Full device sync response:', response);
+      const result = response.data || response;
+
+      alert(buildSyncSummaryMessage(`Full device sync (last ${FULL_SYNC_LOOKBACK_DAYS} days) completed.`, result));
+
+      await fetchAttendance();
+      await fetchStats();
+      await checkTodayStatus();
+    } catch (error) {
+      console.error('❌ Error running full device sync:', error);
+      alert(`❌ Failed to run full sync: ${error.message}`);
+    } finally {
+      setFullSyncing(false);
     }
   };
 
@@ -845,6 +935,48 @@ const Attendance = () => {
                       )}
                     </button>
                   </div>
+                  {canTriggerDeviceSync && (
+                    <>
+                      <div className="col-md-3 d-flex align-items-end">
+                        <button
+                          className="btn btn-warning w-100"
+                          onClick={handleSyncDeviceLogs}
+                          disabled={deviceSyncing}
+                        >
+                          {deviceSyncing ? (
+                            <>
+                              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                              Syncing...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-hdd-network me-2"></i>
+                              Sync Device Logs
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="col-md-3 d-flex align-items-end">
+                        <button
+                          className="btn btn-outline-warning w-100"
+                          onClick={handleFullSyncDeviceLogs}
+                          disabled={fullSyncing}
+                        >
+                          {fullSyncing ? (
+                            <>
+                              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                              Resyncing...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-arrow-clockwise me-2"></i>
+                              Full Resync ({FULL_SYNC_LOOKBACK_DAYS}d)
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

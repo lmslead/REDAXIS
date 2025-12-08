@@ -6,6 +6,22 @@ import './Payroll.css';
 
 GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
+const FINANCE_DEPARTMENT_NAMES = (import.meta.env.VITE_FINANCE_DEPARTMENTS || 'Finance')
+  .split(',')
+  .map((name) => name.trim().toLowerCase())
+  .filter(Boolean);
+
+const resolveDepartmentName = (user) => {
+  if (!user) return '';
+  if (user.department?.name) {
+    return user.department.name.toLowerCase();
+  }
+  if (typeof user.department === 'string') {
+    return (user.departmentName || '').toLowerCase();
+  }
+  return (user.departmentName || '').toLowerCase();
+};
+
 const createDefaultUploadForm = () => ({
   employeeId: '',
   month: new Date().getMonth() + 1,
@@ -41,8 +57,14 @@ const Payroll = () => {
   };
   
   const currentUser = getUser();
+  const currentDepartmentName = resolveDepartmentName(currentUser);
+  const isFinanceUploader = currentDepartmentName
+    ? FINANCE_DEPARTMENT_NAMES.includes(currentDepartmentName)
+    : false;
   const canManage = currentUser?.managementLevel >= 2; // Only L2 and L3 can manage payroll
-  const canUploadPayslips = currentUser?.managementLevel >= 3; // Finance L3+ & L4
+  const canUploadPayslips = currentUser
+    ? currentUser.managementLevel >= 4 || (currentUser.managementLevel >= 3 && isFinanceUploader)
+    : false;
 
   useEffect(() => {
     fetchPayrolls();
@@ -477,7 +499,7 @@ const Payroll = () => {
                 <h5 className="fw-bold mb-1">Payslip Archive</h5>
                 <p className="text-muted mb-0">
                   {canUploadPayslips
-                    ? 'Upload monthly payslips for employees and keep them organized securely on the finance share.'
+                    ? 'Upload monthly payslips for employees. Files are compressed and stored securely on the server.'
                     : 'Download your signed payslips as soon as Finance uploads them.'}
                 </p>
               </div>
@@ -751,7 +773,7 @@ const Payroll = () => {
                       onChange={(event) => setUploadFile(event.target.files?.[0] || null)}
                       required
                     />
-                    <small className="text-muted">PDF only. Files are stored securely on the finance share.</small>
+                    <small className="text-muted">PDF only. Files are compressed and stored securely on the server.</small>
                   </div>
                 </div>
                 <div className="modal-footer">

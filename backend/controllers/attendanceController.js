@@ -2,6 +2,7 @@ import Attendance from '../models/Attendance.js';
 import User from '../models/User.js';
 import mongoose from 'mongoose';
 import { validateLocation, calculateDistance, getLocationConfig as getLocationConfigUtil } from '../utils/locationValidator.js';
+import { syncBiometricLogs, isBiometricSyncConfigured } from '../utils/biometricSyncService.js';
 
 // ⏰ HELPER FUNCTION: Calculate if a date is a working day
 const isWorkingDay = (date, saturdayWorking = false) => {
@@ -603,6 +604,41 @@ export const getAttendanceStats = async (req, res) => {
     res.status(200).json({ success: true, data: stats });
   } catch (error) {
     console.error('Stats error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const syncDeviceAttendance = async (req, res) => {
+  try {
+    const { mode, days, from } = req.query;
+    const forceResync = mode === 'full';
+    const lookbackDays = days ? Number(days) : undefined;
+
+    if (!isBiometricSyncConfigured()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Biometric device configuration is missing. Please set ESSL_DB_* variables.',
+      });
+    }
+
+    const result = await syncBiometricLogs({
+      manualTrigger: true,
+      forceResync,
+      lookbackDays,
+      resyncFromDate: from,
+    });
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.message || 'Failed to sync device logs',
+        data: result,
+      });
+    }
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error('Device sync error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

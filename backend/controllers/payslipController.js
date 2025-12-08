@@ -1,9 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import zlib from 'zlib';
 import Payslip from '../models/Payslip.js';
 import User from '../models/User.js';
 
-const DEFAULT_PAYSLIP_DIR = '\\\\172.16.1.11\\Agents\\Rgstaffhubpayslip';
+const DEFAULT_PAYSLIP_DIR = path.resolve(process.cwd(), '..', 'payslips');
 const PAYSLIP_STORAGE_PATH = process.env.PAYSLIP_STORAGE_PATH || DEFAULT_PAYSLIP_DIR;
 
 const normalizeStoragePath = (rawPath) => {
@@ -12,13 +13,14 @@ const normalizeStoragePath = (rawPath) => {
     throw new Error('Payslip storage path is not configured');
   }
 
-  // Force Windows-style separators so UNC shares stay intact regardless of host OS.
-  const sanitized = trimmed.replace(/\//g, '\\');
-  if (!sanitized.startsWith('\\\\')) {
-    throw new Error(`Payslip storage path must be a UNC share (\\\\server\\share). Received: ${sanitized}`);
+  if (trimmed.startsWith('\\\\')) {
+    const sanitized = trimmed.replace(/\//g, '\\');
+    return path.win32.normalize(sanitized);
   }
-  return path.win32.normalize(sanitized);
-};
+
+  return path.resolve(trimmed);
+}; 
+
 
 const verifyStorageWritable = async (storagePath) => {
   try {
@@ -41,11 +43,6 @@ const verifyStorageWritable = async (storagePath) => {
   }
 };
 
-const getWritableStorageRoot = async () => {
-  const normalizedPath = normalizeStoragePath(PAYSLIP_STORAGE_PATH);
-  return verifyStorageWritable(normalizedPath);
-};
-
 const ensureDirectoryExists = async (targetPath) => {
   try {
     await fs.promises.mkdir(targetPath, { recursive: true });
@@ -58,8 +55,45 @@ const ensureDirectoryExists = async (targetPath) => {
       });
       throw new Error('Unable to prepare target folder for payslip upload');
     }
+
+      const readPayslipBuffer = async (filePath, compression) => {
+        const rawBuffer = await fs.promises.readFile(filePath);
+        if (!compression) {
+          return rawBuffer;
+        }
+
+        if (compression === 'gzip') {
+          return decompressFromGzip(rawBuffer);
+        }
+
+        throw new Error(`Unsupported payslip compression format: ${compression}`);
+      };
   }
 };
+
+const getWritableStorageRoot = async () => {
+  const normalizedPath = normalizeStoragePath(PAYSLIP_STORAGE_PATH);
+  await ensureDirectoryExists(normalizedPath);
+  return verifyStorageWritable(normalizedPath);
+};
+
+const compressToGzip = (buffer) => new Promise((resolve, reject) => {
+  zlib.gzip(buffer, { level: 9 }, (err, result) => {
+    if (err) {
+      return reject(err);
+    }
+    return resolve(result);
+  });
+});
+
+const decompressFromGzip = (buffer) => new Promise((resolve, reject) => {
+  zlib.gunzip(buffer, (err, result) => {
+    if (err) {
+      return reject(err);
+    }
+    return resolve(result);
+  });
+});
 
 const formatPeriodFolder = (year, month) => `${year}_${String(month).padStart(2, '0')}`;
 
@@ -137,9 +171,20 @@ export const uploadPayslip = async (req, res) => {
     const safeOriginalName = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9_.-]/g, '_') || 'payslip.pdf';
     const sanitizedName = safeOriginalName.toLowerCase().endsWith('.pdf') ? safeOriginalName : `${safeOriginalName}.pdf`;
     const finalFileName = `${path.parse(sanitizedName).name}_${Date.now()}.pdf`;
-    const destination = path.join(periodDir, finalFileName);
+    const storedFileName = `${finalFileName}.gz`;
+    const destination = path.join(periodDir, storedFileName);
 
-    await fs.promises.writeFile(destination, req.file.buffer);
+    let compressedBuffer;
+    try {
+      compressedBuffer = await compressToGzip(req.file.buffer);
+    } catch (compressionError) {
+      console.error('Payslip compression failed:', compressionError);
+      return res.status(500).json({ success: false, message: 'Unable to compress payslip before saving' });
+    }
+
+    await fs.promises.writeFile(destination, compressedBuffer);
+
+    const existingPayslip = await Payslip.findOne({ employee: employeeId, month: monthValue, year: yearValue });
 
     const payslip = await Payslip.findOneAndUpdate(
       { employee: employeeId, month: monthValue, year: yearValue },
@@ -150,6 +195,8 @@ export const uploadPayslip = async (req, res) => {
         fileName: finalFileName,
         filePath: destination,
         fileSize: req.file.size,
+        storedFileSize: compressedBuffer.length,
+        compression: 'gzip',
         uploadedBy: req.user._id,
         uploadedAt: new Date(),
         remarks,
@@ -162,6 +209,12 @@ export const uploadPayslip = async (req, res) => {
         populate: { path: 'department', select: 'name' },
       })
       .populate('uploadedBy', 'firstName lastName employeeId');
+
+    if (existingPayslip?.filePath && existingPayslip.filePath !== destination) {
+      fs.promises.unlink(existingPayslip.filePath).catch((unlinkError) => {
+        console.warn('Failed to cleanup previous payslip file:', unlinkError.message);
+      });
+    }
 
     res.status(200).json({ success: true, data: payslip });
   } catch (error) {
@@ -189,15 +242,23 @@ export const downloadPayslip = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payslip file missing from server' });
     }
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-
-    if (isFinance) {
-      return res.download(payslip.filePath, payslip.fileName);
+    let pdfBuffer;
+    try {
+      pdfBuffer = await readPayslipBuffer(payslip.filePath, payslip.compression);
+    } catch (readError) {
+      console.error('Payslip decompression failed:', readError);
+      return res.status(500).json({ success: false, message: 'Unable to read payslip from storage' });
     }
 
-    res.setHeader('Content-Disposition', `inline; filename="${payslip.fileName}"`);
-    return res.sendFile(payslip.filePath);
+    const safeFileName = payslip.fileName?.replace(/"/g, '') || 'payslip.pdf';
+    const dispositionType = isFinance ? 'attachment' : 'inline';
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Content-Disposition', `${dispositionType}; filename="${safeFileName}"`);
+
+    return res.send(pdfBuffer);
   } catch (error) {
     console.error('Payslip download failed:', error);
     res.status(500).json({ success: false, message: error.message || 'Payslip download failed' });

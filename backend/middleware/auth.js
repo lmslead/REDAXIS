@@ -1,6 +1,22 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
+const FINANCE_DEPARTMENT_NAMES = (process.env.FINANCE_DEPARTMENT_NAMES || 'Finance')
+  .split(',')
+  .map((name) => name.trim().toLowerCase())
+  .filter(Boolean);
+
+const normalizeDepartmentName = (department) => {
+  if (!department) return '';
+  if (typeof department === 'string') {
+    return department.trim().toLowerCase();
+  }
+  if (department?.name) {
+    return department.name.trim().toLowerCase();
+  }
+  return '';
+};
+
 export const protect = async (req, res, next) => {
   let token;
 
@@ -13,7 +29,9 @@ export const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
       // Get user from token
-      req.user = await User.findById(decoded.id).select('-password');
+      req.user = await User.findById(decoded.id)
+        .select('-password')
+        .populate('department', 'name code');
 
       if (!req.user) {
         return res.status(401).json({ success: false, message: 'User not found' });
@@ -62,4 +80,48 @@ export const authorizeLevel = (minLevel) => {
     }
     next();
   };
+};
+
+export const authorizeFinancePayslipUpload = async (req, res, next) => {
+  try {
+    const userLevel = req.user?.managementLevel || 0;
+
+    if (userLevel >= 4) {
+      return next();
+    }
+
+    if (userLevel < 3) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only L3 finance admins can upload payslips',
+      });
+    }
+
+    let departmentName = normalizeDepartmentName(req.user.department);
+
+    if (!departmentName && req.user.department) {
+      const refreshedUser = await User.findById(req.user._id)
+        .select('-password')
+        .populate('department', 'name code');
+
+      if (!refreshedUser) {
+        return res.status(401).json({ success: false, message: 'User session invalid. Please re-login.' });
+      }
+
+      req.user = refreshedUser;
+      departmentName = normalizeDepartmentName(refreshedUser.department);
+    }
+
+    if (departmentName && FINANCE_DEPARTMENT_NAMES.includes(departmentName)) {
+      return next();
+    }
+
+    return res.status(403).json({
+      success: false,
+      message: 'Upload access restricted to Finance L3 users only',
+    });
+  } catch (error) {
+    console.error('authorizeFinancePayslipUpload failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to verify finance permissions' });
+  }
 };

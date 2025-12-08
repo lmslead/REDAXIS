@@ -21,12 +21,24 @@ const attendanceSchema = new mongoose.Schema({
     enum: ['present', 'absent', 'half-day', 'on-leave', 'holiday'],
     default: 'present',
   },
+  source: {
+    type: String,
+    enum: ['manual', 'device', 'leave'],
+    default: 'manual',
+  },
   workingHours: {
     type: Number,
     default: 0,
   },
   notes: {
     type: String,
+  },
+  deviceSyncMeta: {
+    empCode: { type: String },
+    deviceId: { type: String },
+    logsCount: { type: Number },
+    lastLogTimestamp: { type: Date },
+    manualTrigger: { type: Boolean },
   },
   // Location tracking for check-in/out
   checkInLocation: {

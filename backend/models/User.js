@@ -61,6 +61,12 @@ const userSchema = new mongoose.Schema({
     trim: true,
     match: [/^\d{12}$/, 'Please enter a valid 12-digit Aadhar number']
   },
+  biometricCode: {
+    type: String,
+    trim: true,
+    uppercase: true,
+    index: true,
+  },
   dateOfBirth: {
     type: Date,
   },
@@ -182,6 +188,16 @@ userSchema.pre('save', async function(next) {
   this.password = await bcrypt.hash(this.password, salt);
 });
 
+// Always keep biometric code in sync with employeeId
+userSchema.pre('save', function(next) {
+  if (this.isModified('employeeId') || !this.biometricCode) {
+    if (this.employeeId) {
+      this.biometricCode = this.employeeId.trim().toUpperCase();
+    }
+  }
+  next();
+});
+
 // Auto-update teamMembers when reportingManager is assigned
 userSchema.post('save', async function(doc) {
   if (doc.reportingManager) {
@@ -205,6 +221,17 @@ userSchema.pre('findOneAndUpdate', async function() {
         { $pull: { teamMembers: docToUpdate._id } }
       );
     }
+  }
+
+  const nextEmployeeId = update.employeeId || update.$set?.employeeId;
+  if (nextEmployeeId) {
+    const normalized = nextEmployeeId.trim().toUpperCase();
+    if (update.$set) {
+      update.$set.biometricCode = update.$set.biometricCode || normalized;
+    } else {
+      update.biometricCode = update.biometricCode || normalized;
+    }
+    this.setUpdate(update);
   }
 });
 
