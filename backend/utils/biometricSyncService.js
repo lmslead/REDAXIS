@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import dns from 'dns';
 import Attendance from '../models/Attendance.js';
 import User from '../models/User.js';
 import BiometricSyncState from '../models/BiometricSyncState.js';
@@ -55,12 +56,78 @@ const buildUserMatchPipeline = (rawCode) => {
 
 export const isBiometricSyncConfigured = () => (
   Boolean(
-    process.env.ESSL_DB_SERVER &&
+    (process.env.ESSL_DB_SERVER || process.env.ESSL_DB_SERVER_IP) &&
     process.env.ESSL_DB_NAME &&
     process.env.ESSL_DB_USER &&
     process.env.ESSL_DB_PASSWORD !== undefined
   )
 );
+
+const resolveEsslServerAddress = async () => {
+  const host = (process.env.ESSL_DB_SERVER || '').trim();
+  const fallbackIp = (process.env.ESSL_DB_SERVER_IP || '').trim();
+
+  if (!host && !fallbackIp) {
+    throw new Error('ESSL_DB_SERVER or ESSL_DB_SERVER_IP must be configured.');
+  }
+
+  if (host) {
+    try {
+      const { address } = await dns.promises.lookup(host);
+      return {
+        serverAddress: address,
+        serverDisplayName: host,
+        usedFallbackIp: false,
+      };
+    } catch (error) {
+      if (!fallbackIp) {
+        const hint = ['EAI_AGAIN', 'ENOTFOUND'].includes(error.code)
+          ? 'DNS lookup failed. Provide ESSL_DB_SERVER_IP with a reachable IP address from the deployment environment.'
+          : error.message;
+        throw new Error(`Unable to resolve ESSL DB host "${host}": ${hint}`);
+      }
+      console.warn(`DNS lookup for ${host} failed (${error.code}). Falling back to ESSL_DB_SERVER_IP.`);
+      return {
+        serverAddress: fallbackIp,
+        serverDisplayName: host || fallbackIp,
+        usedFallbackIp: true,
+      };
+    }
+  }
+
+  return {
+    serverAddress: fallbackIp,
+    serverDisplayName: fallbackIp,
+    usedFallbackIp: true,
+  };
+};
+
+const buildSqlConfig = async () => {
+  const {
+    serverAddress,
+    serverDisplayName,
+    usedFallbackIp,
+  } = await resolveEsslServerAddress();
+
+  return {
+    connection: {
+      user: process.env.ESSL_DB_USER,
+      password: process.env.ESSL_DB_PASSWORD || '',
+      server: serverAddress,
+      database: process.env.ESSL_DB_NAME,
+      port: Number(process.env.ESSL_DB_PORT || 1433),
+      connectionTimeout: Number(process.env.ESSL_DB_CONN_TIMEOUT || 15000),
+      requestTimeout: Number(process.env.ESSL_DB_REQUEST_TIMEOUT || 30000),
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+        serverName: serverDisplayName,
+      },
+    },
+    usedFallbackIp,
+    serverDisplayName,
+  };
+};
 
 const sanitizeTableName = (tableName = 'HRMS') => {
   const trimmed = tableName.trim();
@@ -79,29 +146,22 @@ const getSqlPool = async () => {
     return poolPromise;
   }
 
-  const config = {
-    user: process.env.ESSL_DB_USER,
-    password: process.env.ESSL_DB_PASSWORD || '',
-    server: process.env.ESSL_DB_SERVER,
-    database: process.env.ESSL_DB_NAME,
-    port: Number(process.env.ESSL_DB_PORT || 1433),
-    connectionTimeout: Number(process.env.ESSL_DB_CONN_TIMEOUT || 15000),
-    requestTimeout: Number(process.env.ESSL_DB_REQUEST_TIMEOUT || 30000),
-    options: {
-      encrypt: false,
-      trustServerCertificate: true,
-    },
-  };
+  const { connection, usedFallbackIp, serverDisplayName } = await buildSqlConfig();
 
-  poolPromise = new sql.ConnectionPool(config)
+  poolPromise = new sql.ConnectionPool(connection)
     .connect()
     .then((pool) => {
-      console.log('✅ Connected to ESSL SQL Server');
+      const fallbackNote = usedFallbackIp ? ' (via configured IP fallback)' : '';
+      console.log(`✅ Connected to ESSL SQL Server ${serverDisplayName || ''}${fallbackNote}`.trim());
       return pool;
     })
     .catch((err) => {
       poolPromise = null;
-      console.error('❌ Failed to connect to ESSL SQL Server:', err.message);
+      const needsIpHint = ['EAI_AGAIN', 'ENOTFOUND'].includes(err.code);
+      const hint = needsIpHint
+        ? 'Hint: set ESSL_DB_SERVER_IP in your environment to a reachable IP address from this server.'
+        : '';
+      console.error('❌ Failed to connect to ESSL SQL Server:', err.message, hint);
       throw err;
     });
 
