@@ -63,10 +63,22 @@ const ensureDirectoryExists = async (targetPath) => {
         }
 
         if (compression === 'gzip') {
-          return decompressFromGzip(rawBuffer);
+          try {
+            return await decompressFromGzip(rawBuffer);
+          } catch (error) {
+            console.warn('Payslip gzip decompression failed, serving raw buffer instead', {
+              path: filePath,
+              message: error.message,
+            });
+            return rawBuffer;
+          }
         }
 
-        throw new Error(`Unsupported payslip compression format: ${compression}`);
+        console.warn('Unsupported payslip compression marker. Serving raw buffer.', {
+          path: filePath,
+          compression,
+        });
+        return rawBuffer;
       };
   }
 };
