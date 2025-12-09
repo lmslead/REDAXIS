@@ -6,7 +6,7 @@ const FINANCE_DEPARTMENT_NAMES = (process.env.FINANCE_DEPARTMENT_NAMES || 'Finan
   .map((name) => name.trim().toLowerCase())
   .filter(Boolean);
 
-const normalizeDepartmentName = (department) => {
+export const normalizeDepartmentName = (department) => {
   if (!department) return '';
   if (typeof department === 'string') {
     return department.trim().toLowerCase();
@@ -15,6 +15,22 @@ const normalizeDepartmentName = (department) => {
     return department.name.trim().toLowerCase();
   }
   return '';
+};
+
+export const isFinanceL3User = (user) => {
+  if (!user) {
+    return false;
+  }
+
+  const userLevel = user.managementLevel || 0;
+
+  if (userLevel !== 3) {
+    return false;
+  }
+
+  const departmentName = normalizeDepartmentName(user.department);
+
+  return Boolean(departmentName && FINANCE_DEPARTMENT_NAMES.includes(departmentName));
 };
 
 export const protect = async (req, res, next) => {
@@ -84,17 +100,8 @@ export const authorizeLevel = (minLevel) => {
 
 export const authorizeFinancePayslipUpload = async (req, res, next) => {
   try {
-    const userLevel = req.user?.managementLevel || 0;
-
-    if (userLevel >= 4) {
-      return next();
-    }
-
-    if (userLevel < 3) {
-      return res.status(403).json({
-        success: false,
-        message: 'Only L3 finance admins can upload payslips',
-      });
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'User session invalid. Please re-login.' });
     }
 
     let departmentName = normalizeDepartmentName(req.user.department);
@@ -112,7 +119,11 @@ export const authorizeFinancePayslipUpload = async (req, res, next) => {
       departmentName = normalizeDepartmentName(refreshedUser.department);
     }
 
-    if (departmentName && FINANCE_DEPARTMENT_NAMES.includes(departmentName)) {
+    if (!req.user.department && departmentName) {
+      req.user.department = { name: departmentName };
+    }
+
+    if (isFinanceL3User(req.user)) {
       return next();
     }
 

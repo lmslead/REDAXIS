@@ -3,6 +3,7 @@ import path from 'path';
 import zlib from 'zlib';
 import Payslip from '../models/Payslip.js';
 import User from '../models/User.js';
+import { isFinanceL3User } from '../middleware/auth.js';
 
 const DEFAULT_PAYSLIP_DIR = path.resolve(process.cwd(), '..', 'payslips');
 const PAYSLIP_STORAGE_PATH = process.env.PAYSLIP_STORAGE_PATH || DEFAULT_PAYSLIP_DIR;
@@ -113,10 +114,9 @@ export const getPayslips = async (req, res) => {
   try {
     const { employeeId, month, year } = req.query;
     const query = {};
-    const managementLevel = req.user.managementLevel || 0;
-    const isFinance = managementLevel >= 3;
+    const canViewAllPayslips = isFinanceL3User(req.user);
 
-    if (!isFinance) {
+    if (!canViewAllPayslips) {
       query.employee = req.user._id;
     } else if (employeeId) {
       query.employee = employeeId;
@@ -244,9 +244,9 @@ export const downloadPayslip = async (req, res) => {
     }
 
     const isOwner = payslip.employee?._id?.equals(req.user._id);
-    const isFinance = (req.user.managementLevel || 0) >= 3;
+    const canViewAllPayslips = isFinanceL3User(req.user);
 
-    if (!isOwner && !isFinance) {
+    if (!isOwner && !canViewAllPayslips) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
@@ -263,7 +263,7 @@ export const downloadPayslip = async (req, res) => {
     }
 
     const safeFileName = payslip.fileName?.replace(/"/g, '') || 'payslip.pdf';
-    const dispositionType = isFinance ? 'attachment' : 'inline';
+    const dispositionType = canViewAllPayslips ? 'attachment' : 'inline';
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Length', pdfBuffer.length);
