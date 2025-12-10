@@ -19,6 +19,7 @@ import chatRoutes from './routes/chatRoutes.js';
 import teamRoutes from './routes/teamRoutes.js';
 import assetsRoutes from './routes/assetsRoutes.js';
 import resignationRoutes from './routes/resignationRoutes.js';
+import employeeDocumentRoutes from './routes/employeeDocumentRoutes.js';
 
 // Import utilities
 import { setupEscalationCron } from './utils/escalationService.js';
@@ -68,6 +69,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/assets', assetsRoutes);
 app.use('/api/resignations', resignationRoutes);
+app.use('/api/employee-documents', employeeDocumentRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

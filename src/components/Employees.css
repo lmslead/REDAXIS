@@ -134,3 +134,32 @@
     flex: 1 1 100%;
   }
 }
+
+.document-status-card {
+  border: 1px dashed rgba(15, 23, 42, 0.15);
+  border-radius: 1rem;
+  padding: 1rem;
+  height: 100%;
+  background: #fff;
+  box-shadow: inset 0 0 0 rgba(0, 0, 0, 0);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.document-status-card.uploaded {
+  border-color: rgba(34, 197, 94, 0.4);
+  box-shadow: 0 5px 15px rgba(34, 197, 94, 0.15);
+}
+
+.document-status-card.pending {
+  border-color: rgba(100, 116, 139, 0.4);
+  background: #f8fafc;
+}
+
+.document-status-card h6 {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.document-status-card .document-meta {
+  font-size: 0.85rem;
+}

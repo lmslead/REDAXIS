@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { authAPI } from '../services/api';
+import { authAPI, employeeDocumentsAPI } from '../services/api';
 import './Profile.css';
 
 const createEmptyAddress = () => ({
@@ -48,6 +48,11 @@ const Profile = () => {
     confirmPassword: '',
   });
 
+  const [documentRecords, setDocumentRecords] = useState([]);
+  const [documentTypes, setDocumentTypes] = useState([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [documentsError, setDocumentsError] = useState('');
+
   const handleFieldChange = (field, value) => {
     setFormData((prev) => ({
       ...prev,
@@ -67,6 +72,7 @@ const Profile = () => {
 
   useEffect(() => {
     fetchUserProfile();
+    fetchEmploymentDocuments();
   }, []);
 
   const fetchUserProfile = async () => {
@@ -92,6 +98,23 @@ const Profile = () => {
       console.error('Error fetching profile:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchEmploymentDocuments = async () => {
+    setDocumentsLoading(true);
+    setDocumentsError('');
+    try {
+      const response = await employeeDocumentsAPI.getAll();
+      setDocumentRecords(response.data || []);
+      setDocumentTypes(response.docTypes || []);
+    } catch (error) {
+      console.error('Error fetching employment documents:', error);
+      setDocumentsError(error.message || 'Unable to load employment documents');
+      setDocumentRecords([]);
+      setDocumentTypes([]);
+    } finally {
+      setDocumentsLoading(false);
     }
   };
 
@@ -145,6 +168,22 @@ const Profile = () => {
       });
     } catch (error) {
       alert(error.message || 'Password change failed');
+    }
+  };
+
+  const handleDownloadDocument = async (record) => {
+    try {
+      const blob = await employeeDocumentsAPI.download(record._id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = record.fileName || `${record.docType}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(error.message || 'Failed to download document');
     }
   };
 
@@ -241,6 +280,60 @@ const Profile = () => {
                   {user?.status}
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Employment Documents */}
+          <div className="card border-0 shadow-sm mt-3">
+            <div className="card-body profile-documents-card">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6 className="fw-bold mb-0">Employment Letters</h6>
+                {documentsLoading && (
+                  <span className="spinner-border spinner-border-sm text-primary" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </span>
+                )}
+              </div>
+              {documentsError && (
+                <div className="alert alert-warning py-2">{documentsError}</div>
+              )}
+              {!documentsError && (
+                <div className="profile-document-list">
+                  {documentTypes.length === 0 && !documentsLoading && (
+                    <p className="text-muted small mb-0">No employment letter types configured yet.</p>
+                  )}
+                  {documentTypes.map((type) => {
+                    const record = documentRecords.find((doc) => doc.docType === type.key);
+                    const uploadedDate = record?.uploadedAt ? new Date(record.uploadedAt) : null;
+                    return (
+                      <div
+                        className={`profile-document-row ${record ? 'ready' : 'pending'}`}
+                        key={type.key}
+                      >
+                        <div>
+                          <div className="profile-document-title">{type.label}</div>
+                          <small className="text-muted">
+                            {record
+                              ? `Updated on ${uploadedDate ? uploadedDate.toLocaleDateString() : 'N/A'}`
+                              : type.description}
+                          </small>
+                        </div>
+                        {record ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => handleDownloadDocument(record)}
+                          >
+                            <i className="bi bi-eye me-1"></i>View
+                          </button>
+                        ) : (
+                          <span className="badge bg-secondary">Pending</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

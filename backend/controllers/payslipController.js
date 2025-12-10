@@ -1,112 +1,15 @@
 import fs from 'fs';
 import path from 'path';
-import zlib from 'zlib';
 import Payslip from '../models/Payslip.js';
 import User from '../models/User.js';
 import { isFinanceL3User } from '../middleware/auth.js';
-
-const DEFAULT_PAYSLIP_DIR = path.resolve(process.cwd(), '..', 'payslips');
-const PAYSLIP_STORAGE_PATH = process.env.PAYSLIP_STORAGE_PATH || DEFAULT_PAYSLIP_DIR;
-
-const normalizeStoragePath = (rawPath) => {
-  const trimmed = rawPath?.trim();
-  if (!trimmed) {
-    throw new Error('Payslip storage path is not configured');
-  }
-
-  if (trimmed.startsWith('\\\\')) {
-    const sanitized = trimmed.replace(/\//g, '\\');
-    return path.win32.normalize(sanitized);
-  }
-
-  return path.resolve(trimmed);
-}; 
-
-
-const verifyStorageWritable = async (storagePath) => {
-  try {
-    await fs.promises.access(storagePath, fs.constants.W_OK);
-    return storagePath;
-  } catch (error) {
-    console.error('[Payslip storage] Access check failed', {
-      path: storagePath,
-      code: error.code,
-      message: error.message,
-    });
-
-    if (error.code === 'ENOENT') {
-      throw new Error(`Payslip storage path is unreachable: ${storagePath}`);
-    }
-    if (error.code === 'EACCES' || error.code === 'EPERM') {
-      throw new Error(`Payslip storage path is not writable: ${storagePath}`);
-    }
-    throw new Error(`Unable to access payslip storage path: ${storagePath}`);
-  }
-};
-
-const ensureDirectoryExists = async (targetPath) => {
-  try {
-    await fs.promises.mkdir(targetPath, { recursive: true });
-  } catch (error) {
-    if (error.code !== 'EEXIST') {
-      console.error('[Payslip storage] Directory creation failed', {
-        path: targetPath,
-        code: error.code,
-        message: error.message,
-      });
-      throw new Error('Unable to prepare target folder for payslip upload');
-    }
-  }
-};
-
-const getWritableStorageRoot = async () => {
-  const normalizedPath = normalizeStoragePath(PAYSLIP_STORAGE_PATH);
-  await ensureDirectoryExists(normalizedPath);
-  return verifyStorageWritable(normalizedPath);
-};
-
-const compressToGzip = (buffer) => new Promise((resolve, reject) => {
-  zlib.gzip(buffer, { level: 9 }, (err, result) => {
-    if (err) {
-      return reject(err);
-    }
-    return resolve(result);
-  });
-});
-
-const decompressFromGzip = (buffer) => new Promise((resolve, reject) => {
-  zlib.gunzip(buffer, (err, result) => {
-    if (err) {
-      return reject(err);
-    }
-    return resolve(result);
-  });
-});
-
-const readPayslipBuffer = async (filePath, compression) => {
-  const rawBuffer = await fs.promises.readFile(filePath);
-  if (!compression) {
-    return rawBuffer;
-  }
-
-  if (compression === 'gzip') {
-    try {
-      return await decompressFromGzip(rawBuffer);
-    } catch (error) {
-      console.warn('Payslip gzip decompression failed, serving raw buffer instead', {
-        path: filePath,
-        message: error.message,
-      });
-      return rawBuffer;
-    }
-  }
-
-  console.warn('Unsupported payslip compression marker. Serving raw buffer.', {
-    path: filePath,
-    compression,
-  });
-  return rawBuffer;
-};
+import {
+  compressToGzip,
+  ensureDirectoryExists,
+  getWritableStorageRoot,
+  readCompressedFile,
+  sanitizePdfFileName,
+} from '../utils/fileStorage.js';
 
 const formatPeriodFolder = (year, month) => `${year}_${String(month).padStart(2, '0')}`;
 
@@ -180,8 +83,7 @@ export const uploadPayslip = async (req, res) => {
 
     await ensureDirectoryExists(periodDir);
 
-    const safeOriginalName = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9_.-]/g, '_') || 'payslip.pdf';
-    const sanitizedName = safeOriginalName.toLowerCase().endsWith('.pdf') ? safeOriginalName : `${safeOriginalName}.pdf`;
+    const sanitizedName = sanitizePdfFileName(req.file.originalname, 'payslip.pdf');
     const finalFileName = `${path.parse(sanitizedName).name}_${Date.now()}.pdf`;
     const storedFileName = `${finalFileName}.gz`;
     const destination = path.join(periodDir, storedFileName);
@@ -256,7 +158,7 @@ export const downloadPayslip = async (req, res) => {
 
     let pdfBuffer;
     try {
-      pdfBuffer = await readPayslipBuffer(payslip.filePath, payslip.compression);
+      pdfBuffer = await readCompressedFile(payslip.filePath, payslip.compression);
     } catch (readError) {
       console.error('Payslip decompression failed:', readError);
       return res.status(500).json({ success: false, message: 'Unable to read payslip from storage' });

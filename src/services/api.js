@@ -335,6 +335,50 @@ export const payslipsAPI = {
   },
 };
 
+// Employment Documents API
+export const employeeDocumentsAPI = {
+  getAll: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest(`/employee-documents${query ? `?${query}` : ''}`);
+  },
+  upload: ({ employeeId, docType, file }) => {
+    const formData = new FormData();
+    formData.append('employeeId', employeeId);
+    formData.append('docType', docType);
+    formData.append('document', file);
+
+    return apiRequest('/employee-documents', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  download: async (id) => {
+    const token = getToken();
+    const response = await fetch(`${API_BASE_URL}/employee-documents/${id}/download`, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      let errorMessage = 'Failed to download document';
+      try {
+        if (contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData?.message || errorMessage;
+        } else {
+          errorMessage = await response.text() || errorMessage;
+        }
+      } catch (parseError) {
+        console.error('Document download parse error:', parseError);
+      }
+      throw new Error(errorMessage);
+    }
+
+    return response.blob();
+  },
+};
+
 // Team API (Reporting Manager Features)
 export const teamAPI = {
   // Get all team members reporting to the current manager
@@ -409,4 +453,5 @@ export default {
   payslips: payslipsAPI,
   team: teamAPI,
   assets: assetsAPI,
+  employeeDocuments: employeeDocumentsAPI,
 };

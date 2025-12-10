@@ -9,7 +9,9 @@ REDAXIS/
 ├── backend/
 ├── public/
 ├── src/
-└── payslips/   ← compressed files land here
+└── payslips/
+	├── RG0123/2024_12/*.pdf.gz  ← payslips stay here
+	└── employee-documents/      ← new letter uploads live here
 ```
 
 If the `payslips` directory does not exist yet, create it once (from the root of the deployment):
@@ -20,6 +22,10 @@ chmod 770 ~/REDAXIS/payslips
 ```
 
 The server resolves the folder from `PAYSLIP_STORAGE_PATH` in `backend/.env`. By default it points to `../payslips`, which resolves to the sibling folder shown above when the backend runs from `REDAXIS/backend`.
+
+## Employment documents
+
+Offer/appointment/confirmation/relieving/experience letters use the exact same storage root but under the `employee-documents` sub-folder. Each upload is compressed (`.pdf.gz`) inside `payslips/employee-documents/<EMPLOYEE_ID>/<docType>/`. Set `EMPLOYEE_DOCUMENT_FOLDER` if you need to rename that child folder.
 
 ## Compression workflow
 
@@ -38,6 +44,8 @@ Only L3 users mapped to a Finance department (configurable via `FINANCE_DEPARTME
 ```
 PAYSLIP_STORAGE_PATH=../payslips
 FINANCE_DEPARTMENT_NAMES=Finance
+EMPLOYEE_DOCUMENT_FOLDER=employee-documents
 ```
 
 Override `PAYSLIP_STORAGE_PATH` if you relocate the storage folder, and extend `FINANCE_DEPARTMENT_NAMES` with comma-separated aliases if Finance uses multiple department names.
+`EMPLOYEE_DOCUMENT_FOLDER` lets you rename the sub-directory used for offer/appointment/confirmation/relieving/experience letters without touching the overall storage root.

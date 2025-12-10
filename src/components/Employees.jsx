@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { employeesAPI, departmentsAPI, teamAPI, assetsAPI } from '../services/api';
+import { employeesAPI, departmentsAPI, teamAPI, assetsAPI, employeeDocumentsAPI } from '../services/api';
 import { getUser } from '../services/api';
 import './Employees.css';
 
@@ -49,9 +49,19 @@ const Employees = () => {
   const [canViewSensitiveData, setCanViewSensitiveData] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewEmployee, setViewEmployee] = useState(null);
+  const [showDocumentModal, setShowDocumentModal] = useState(false);
+  const [documentEmployee, setDocumentEmployee] = useState(null);
+  const [documentRecords, setDocumentRecords] = useState([]);
+  const [documentTypes, setDocumentTypes] = useState([]);
+  const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentUploading, setDocumentUploading] = useState(false);
+  const [documentForm, setDocumentForm] = useState({ docType: '', file: null });
+  const [documentError, setDocumentError] = useState('');
+  const [documentInputKey, setDocumentInputKey] = useState(Date.now());
   
   const currentUser = getUser();
   const canManage = currentUser?.managementLevel >= 2; // L2, L3, and L4 can manage employees
+  const canManageDocuments = currentUser?.managementLevel >= 3;
   const formatAddress = (addressObj) => {
     if (!addressObj) return 'N/A';
     const parts = [
@@ -139,6 +149,99 @@ const Employees = () => {
       console.error('Error fetching managers:', error);
       // Set empty array if fetch fails - this is okay, user can still create employees without RM
       setManagers([]);
+    }
+  };
+
+  const fetchEmployeeDocuments = async (employeeId) => {
+    setDocumentLoading(true);
+    setDocumentError('');
+    try {
+      const response = await employeeDocumentsAPI.getAll({ employeeId });
+      setDocumentRecords(response.data || []);
+      setDocumentTypes(response.docTypes || []);
+      const firstType = response.docTypes?.[0]?.key || '';
+      setDocumentForm((prev) => ({
+        ...prev,
+        docType: prev.docType && response.docTypes?.some((type) => type.key === prev.docType)
+          ? prev.docType
+          : firstType,
+        file: null,
+      }));
+      setDocumentInputKey(Date.now());
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      setDocumentError(error.message || 'Failed to load documents');
+      setDocumentRecords([]);
+      setDocumentTypes([]);
+    } finally {
+      setDocumentLoading(false);
+    }
+  };
+
+  const openDocumentModal = (employee) => {
+    setDocumentEmployee(employee);
+    setShowDocumentModal(true);
+    fetchEmployeeDocuments(employee._id);
+  };
+
+  const closeDocumentModal = () => {
+    setShowDocumentModal(false);
+    setDocumentEmployee(null);
+    setDocumentRecords([]);
+    setDocumentTypes([]);
+    setDocumentForm({ docType: '', file: null });
+    setDocumentError('');
+  };
+
+  const handleDocumentUpload = async (e) => {
+    e.preventDefault();
+    if (!documentEmployee) {
+      return;
+    }
+
+    if (!documentForm.docType) {
+      setDocumentError('Select a document type before uploading');
+      return;
+    }
+
+    if (!documentForm.file) {
+      setDocumentError('Attach a PDF file to upload');
+      return;
+    }
+
+    setDocumentUploading(true);
+    setDocumentError('');
+    try {
+      await employeeDocumentsAPI.upload({
+        employeeId: documentEmployee._id,
+        docType: documentForm.docType,
+        file: documentForm.file,
+      });
+      alert('Document uploaded successfully!');
+      setDocumentForm((prev) => ({ ...prev, file: null }));
+      setDocumentInputKey(Date.now());
+      fetchEmployeeDocuments(documentEmployee._id);
+    } catch (error) {
+      console.error('Document upload failed:', error);
+      setDocumentError(error.message || 'Failed to upload document');
+    } finally {
+      setDocumentUploading(false);
+    }
+  };
+
+  const handleDocumentDownload = async (record) => {
+    try {
+      const blob = await employeeDocumentsAPI.download(record._id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = record.fileName || `${record.docType}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(error.message || 'Failed to download document');
     }
   };
 
@@ -473,6 +576,16 @@ const Employees = () => {
                               title="Edit Employee"
                             >
                               <i className="bi bi-pencil"></i>
+                            </button>
+                          )}
+
+                          {canManageDocuments && (
+                            <button
+                              className="btn btn-sm btn-outline-success"
+                              onClick={() => openDocumentModal(employee)}
+                              title="Manage employment documents"
+                            >
+                              <i className="bi bi-folder-check"></i>
                             </button>
                           )}
                           
@@ -1121,6 +1234,139 @@ const Employees = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Employment Documents Modal */}
+      {showDocumentModal && documentEmployee && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-xl modal-dialog-centered">
+            <div className="modal-content" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+              <div className="modal-header">
+                <div>
+                  <h5 className="modal-title mb-0">Employment Documents</h5>
+                  <small className="text-muted">
+                    {documentEmployee.firstName} {documentEmployee.lastName} • {documentEmployee.employeeId}
+                  </small>
+                </div>
+                <button type="button" className="btn-close" onClick={closeDocumentModal}></button>
+              </div>
+              <div className="modal-body" style={{ overflowY: 'auto' }}>
+                {documentLoading ? (
+                  <div className="d-flex justify-content-center py-5">
+                    <div className="spinner-border text-primary" role="status">
+                      <span className="visually-hidden">Loading...</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="row g-4">
+                    <div className="col-lg-7">
+                      {documentTypes.length === 0 ? (
+                        <div className="alert alert-info mb-0">Document types not configured</div>
+                      ) : (
+                        <div className="row g-3">
+                          {documentTypes.map((type) => {
+                            const record = documentRecords.find((doc) => doc.docType === type.key);
+                            const uploadedDate = record?.uploadedAt ? new Date(record.uploadedAt) : null;
+                            return (
+                              <div className="col-md-6" key={type.key}>
+                                <div className={`document-status-card ${record ? 'uploaded' : 'pending'}`}>
+                                  <div className="d-flex justify-content-between align-items-start">
+                                    <div>
+                                      <h6 className="mb-1">{type.label}</h6>
+                                      <p className="text-muted small mb-1">{type.description}</p>
+                                    </div>
+                                    <span className={`badge ${record ? 'bg-success' : 'bg-secondary'}`}>
+                                      {record ? 'Uploaded' : 'Pending'}
+                                    </span>
+                                  </div>
+                                  {record ? (
+                                    <div className="document-meta">
+                                      <small className="text-muted d-block">Last updated</small>
+                                      <strong className="d-block mb-2">
+                                        {uploadedDate
+                                          ? `${uploadedDate.toLocaleDateString()} • ${uploadedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                          : 'Recently updated'}
+                                      </strong>
+                                      <button
+                                        type="button"
+                                        className="btn btn-link p-0 small"
+                                        onClick={() => handleDocumentDownload(record)}
+                                      >
+                                        <i className="bi bi-download me-1"></i>Download PDF
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="document-meta text-muted small">
+                                      Upload pending for this letter type.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <div className="col-lg-5">
+                      <div className="card border-0 shadow-sm h-100">
+                        <div className="card-body">
+                          <h6 className="fw-bold mb-3">Upload / Replace Document</h6>
+                          {documentError && (
+                            <div className="alert alert-danger py-2">{documentError}</div>
+                          )}
+                          <form onSubmit={handleDocumentUpload}>
+                            <div className="mb-3">
+                              <label className="form-label">Document Type</label>
+                              <select
+                                className="form-select"
+                                value={documentForm.docType}
+                                onChange={(e) => {
+                                  setDocumentForm((prev) => ({ ...prev, docType: e.target.value }));
+                                  setDocumentError('');
+                                }}
+                                required
+                              >
+                                <option value="" disabled>Select type</option>
+                                {documentTypes.map((type) => (
+                                  <option key={type.key} value={type.key}>{type.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="mb-3">
+                              <label className="form-label">PDF File</label>
+                              <input
+                                key={documentInputKey}
+                                type="file"
+                                accept="application/pdf"
+                                className="form-control"
+                                onChange={(e) => {
+                                  setDocumentForm((prev) => ({ ...prev, file: e.target.files?.[0] || null }));
+                                  setDocumentError('');
+                                }}
+                                required
+                              />
+                              <small className="text-muted">Max 10 MB. Existing files will be replaced.</small>
+                            </div>
+                            <button
+                              type="submit"
+                              className="btn btn-primary w-100"
+                              disabled={documentUploading || documentTypes.length === 0}
+                            >
+                              {documentUploading ? 'Uploading...' : 'Upload Document'}
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={closeDocumentModal}>Close</button>
+              </div>
             </div>
           </div>
         </div>
