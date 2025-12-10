@@ -26,7 +26,7 @@ const resignationAPI = {
     });
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Failed to submit resignation');
+      throw new Error(error.message || 'Failed to submit exit request');
     }
     return response.json();
   },
@@ -101,13 +101,13 @@ const Resignation = () => {
     try {
       const response = await resignationAPI.getAll();
       // Filter out any resignations with missing employee data
-      const validResignations = (response.data || []).filter(resignation => 
+      const validResignations = (response.data || []).filter(resignation =>
         resignation && resignation.employee
       );
       setResignations(validResignations);
     } catch (error) {
-      console.error('Error fetching resignations:', error);
-      alert('Failed to fetch resignations. Please refresh the page.');
+      console.error('Error fetching exit requests:', error);
+      alert('Failed to fetch exit requests. Please refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -117,12 +117,12 @@ const Resignation = () => {
     e.preventDefault();
     try {
       await resignationAPI.submit(formData);
-      alert('Resignation submitted successfully!');
+      alert('Exit request submitted successfully!');
       setShowModal(false);
       setFormData({ lastWorkingDate: '', reason: '' });
       fetchResignations();
     } catch (error) {
-      alert(error.message || 'Failed to submit resignation');
+      alert(error.message || 'Failed to submit exit request');
     }
   };
 
@@ -140,10 +140,10 @@ const Resignation = () => {
 
     try {
       await resignationAPI.updateStatus(id, status, remarks);
-      alert(`Resignation ${status} successfully!`);
+      alert(`Exit request ${status} successfully!`);
       fetchResignations();
     } catch (error) {
-      alert(error.message || 'Failed to update status');
+      alert(error.message || 'Failed to update exit status');
     }
   };
 
@@ -168,7 +168,7 @@ const Resignation = () => {
 
   const openExitModal = (resignation) => {
     if (!resignation?.employee) {
-      alert('Employee data not available for this resignation.');
+      alert('Employee data not available for this exit request.');
       return;
     }
     setSelectedResignation(resignation);
@@ -177,7 +177,7 @@ const Resignation = () => {
 
   const openDetailModal = (resignation) => {
     if (!resignation?.employee) {
-      alert('Employee data not available for this resignation.');
+      alert('Employee data not available for this exit request.');
       return;
     }
     setSelectedResignation(resignation);
@@ -223,12 +223,12 @@ const Resignation = () => {
     <div className="container-fluid py-4">
       <div className="row mb-4">
         <div className="col">
-          <h2 className="fw-bold">Resignation & Exit Management</h2>
-          <p className="text-muted">Manage resignations and exit procedures</p>
+          <h2 className="fw-bold">Exit Management</h2>
+          <p className="text-muted">Manage exit requests and clearance procedures</p>
         </div>
         <div className="col-auto">
           <button className="btn btn-danger" onClick={() => setShowModal(true)}>
-            <i className="bi bi-box-arrow-right me-2"></i>Submit Resignation
+            <i className="bi bi-box-arrow-right me-2"></i>Submit Exit Request
           </button>
         </div>
       </div>
@@ -243,7 +243,7 @@ const Resignation = () => {
                   <i className="bi bi-file-text fs-2 text-primary"></i>
                 </div>
                 <div className="flex-grow-1 ms-3">
-                  <p className="text-muted mb-1">Total Resignations</p>
+                  <p className="text-muted mb-1">Total Exit Requests</p>
                   <h3 className="fw-bold mb-0">{stats.total}</h3>
                 </div>
               </div>
@@ -297,14 +297,14 @@ const Resignation = () => {
         </div>
       </div>
 
-      {/* Resignations List */}
+      {/* Exit Requests */}
       <div className="card border-0 shadow-sm">
         <div className="card-body">
-          <h5 className="card-title mb-3">Resignation Requests</h5>
+          <h5 className="card-title mb-3">Exit Requests</h5>
           {resignations.length === 0 ? (
             <div className="text-center py-5">
               <i className="bi bi-inbox fs-1 text-muted"></i>
-              <p className="text-muted mt-3">No resignation requests found</p>
+              <p className="text-muted mt-3">No exit requests found</p>
             </div>
           ) : (
             <div className="table-responsive">
@@ -312,7 +312,7 @@ const Resignation = () => {
                 <thead>
                   <tr>
                     <th>Employee</th>
-                    <th>Resignation Date</th>
+                    <th>Exit Request Date</th>
                     <th>Last Working Date</th>
                     <th>Reason</th>
                     <th>Status</th>
@@ -385,13 +385,13 @@ const Resignation = () => {
         </div>
       </div>
 
-      {/* Submit Resignation Modal */}
+      {/* Submit Exit Request Modal */}
       {showModal && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Submit Resignation</h5>
+                <h5 className="modal-title">Submit Exit Request</h5>
                 <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
               </div>
               <form onSubmit={handleSubmit}>
@@ -408,12 +408,12 @@ const Resignation = () => {
                     />
                   </div>
                   <div className="mb-3">
-                    <label className="form-label">Reason for Resignation *</label>
+                    <label className="form-label">Reason for Exit *</label>
                     <textarea
                       className="form-control"
                       rows="4"
                       required
-                      placeholder="Please provide your reason for resignation..."
+                      placeholder="Please provide your reason for exit..."
                       value={formData.reason}
                       onChange={(e) => setFormData({...formData, reason: e.target.value})}
                     />
@@ -424,7 +424,7 @@ const Resignation = () => {
                     Cancel
                   </button>
                   <button type="submit" className="btn btn-danger">
-                    Submit Resignation
+                    Submit Exit Request
                   </button>
                 </div>
               </form>
@@ -488,7 +488,7 @@ const Resignation = () => {
         </div>
       )}
 
-      {/* Resignation Detail Modal */}
+      {/* Exit Detail Modal */}
       {showDetailModal && selectedResignation && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '800px' }}>
@@ -537,7 +537,7 @@ const Resignation = () => {
                 <div className="row g-2 mb-2">
                   <div className="col-4">
                     <small className="text-muted d-block">
-                      <i className="bi bi-calendar-event me-1"></i>Resignation Date
+                      <i className="bi bi-calendar-event me-1"></i>Exit Request Date
                     </small>
                     <small className="fw-bold">{formatDate(selectedResignation.resignationDate)}</small>
                   </div>
@@ -560,7 +560,7 @@ const Resignation = () => {
                 {/* Reason */}
                 <div className="mb-2">
                   <small className="text-muted d-block mb-1">
-                    <i className="bi bi-chat-left-text me-1"></i>Reason for Resignation
+                    <i className="bi bi-chat-left-text me-1"></i>Reason for Exit
                   </small>
                   <p className="mb-0 p-2 bg-light rounded small">{selectedResignation.reason}</p>
                 </div>
@@ -675,7 +675,7 @@ const Resignation = () => {
                 {!canManageResignation(selectedResignation) && selectedResignation.status === 'pending' && canManage && (
                   <small className="text-muted me-auto">
                     <i className="bi bi-info-circle me-1"></i>
-                    Only L4 (CEO/Owner) can approve L3 resignations
+                    Only L4 (CEO/Owner) can approve L3 exit requests
                   </small>
                 )}
                 {canManageResignation(selectedResignation) && (selectedResignation.status === 'approved' || selectedResignation.status === 'completed') && (

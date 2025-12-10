@@ -51,7 +51,7 @@ const SideBar = ({ isMobile = false, isOpen = true, onClose = () => {} }) => {
     },
     { name: "My Team", icon: <FaUserFriends />, path: "/my-team", showForManagers: true },
     { name: "Assets", icon: <FaLaptop />, path: "/assets" },
-    { name: "Resignation", icon: <BiLogOut />, path: "/resignation" },
+    { name: "Exit", icon: <BiLogOut />, path: "/exit" },
     { name: "Payroll", icon: <FaMoneyBillWave />, path: "/payroll" },
     { 
       name: "Engage", 

@@ -148,7 +148,8 @@ function App() {
                   <Route path="/chat" element={<Chat />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/assets" element={<Assets />} />
-                  <Route path="/resignation" element={<Resignation />} />
+                  <Route path="/exit" element={<Resignation />} />
+                  <Route path="/resignation" element={<Navigate to="/exit" replace />} />
                 </Routes>
               </div>
             </div>
