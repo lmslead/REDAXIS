@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/build/pdf';
 import { payrollAPI, payslipsAPI, employeesAPI, getUser } from '../services/api';
 import './Payroll.css';
@@ -44,11 +44,39 @@ const Payroll = () => {
   const [payslipLoading, setPayslipLoading] = useState(true);
   const [payslipFilterMonth, setPayslipFilterMonth] = useState('');
   const [payslipFilterYear, setPayslipFilterYear] = useState(new Date().getFullYear());
+  const [payslipSearchTerm, setPayslipSearchTerm] = useState('');
   const [employees, setEmployees] = useState([]);
   const [uploadForm, setUploadForm] = useState(createDefaultUploadForm);
   const [viewerState, setViewerState] = useState({ open: false, title: '' });
   const [viewerLoading, setViewerLoading] = useState(false);
   const [viewerPages, setViewerPages] = useState([]);
+  const [periodPayslipEmployees, setPeriodPayslipEmployees] = useState([]);
+  const [periodLookupLoading, setPeriodLookupLoading] = useState(false);
+  const [periodLookupError, setPeriodLookupError] = useState('');
+
+  const fetchPeriodPayslipEmployees = useCallback(async (month, year) => {
+    if (!month || !year) {
+      setPeriodPayslipEmployees([]);
+      setPeriodLookupError('');
+      return;
+    }
+
+    setPeriodLookupLoading(true);
+    setPeriodLookupError('');
+    try {
+      const response = await payslipsAPI.getAll({ month, year });
+      const existingEmployeeIds = (response.data || [])
+        .map((record) => record.employee?._id || record.employee)
+        .filter(Boolean);
+      setPeriodPayslipEmployees(existingEmployeeIds);
+    } catch (error) {
+      console.error('Error fetching payslips for selected period:', error);
+      setPeriodPayslipEmployees([]);
+      setPeriodLookupError(error.message || 'Unable to verify payslips for this period');
+    } finally {
+      setPeriodLookupLoading(false);
+    }
+  }, []);
 
   const resetViewerState = () => {
     setViewerPages([]);
@@ -78,6 +106,29 @@ const Payroll = () => {
       fetchEmployees();
     }
   }, [canUploadPayslips]);
+
+  useEffect(() => {
+    if (!showUploadModal) return;
+    fetchPeriodPayslipEmployees(uploadForm.month, uploadForm.year);
+  }, [showUploadModal, uploadForm.month, uploadForm.year, fetchPeriodPayslipEmployees]);
+
+  useEffect(() => {
+    if (!showUploadModal) return;
+    if (!uploadForm.employeeId) return;
+    const editingEmployeeId = uploadTarget?.employee?._id || uploadTarget?.employee || '';
+    if (editingEmployeeId && uploadForm.employeeId === editingEmployeeId) {
+      return;
+    }
+    if (periodPayslipEmployees.includes(uploadForm.employeeId)) {
+      setUploadForm((prev) => ({ ...prev, employeeId: '' }));
+    }
+  }, [showUploadModal, uploadForm.employeeId, periodPayslipEmployees, uploadTarget]);
+
+  useEffect(() => {
+    if (showUploadModal) return;
+    setPeriodPayslipEmployees([]);
+    setPeriodLookupError('');
+  }, [showUploadModal]);
 
   const fetchPayrolls = async () => {
     setLoading(true);
@@ -276,6 +327,41 @@ const Payroll = () => {
     if (b.year !== a.year) return b.year - a.year;
     return b.month - a.month;
   });
+
+  const filteredPayslipRows = useMemo(() => {
+    const term = payslipSearchTerm.trim().toLowerCase();
+    if (!term) {
+      return sortedPayslipRows;
+    }
+
+    return sortedPayslipRows.filter((payslip) => {
+      const nameChunk = `${payslip.employee?.firstName || ''} ${payslip.employee?.lastName || ''}`.trim().toLowerCase();
+      const idChunk = (payslip.employee?.employeeId || '').toLowerCase();
+      const periodChunk = formatPeriodLabel(payslip).toLowerCase();
+      const remarkChunk = (payslip.remarks || '').toLowerCase();
+
+      return [nameChunk, idChunk, periodChunk, remarkChunk].some((chunk) => chunk.includes(term));
+    });
+  }, [sortedPayslipRows, payslipSearchTerm]);
+
+  const editingEmployeeId = uploadTarget?.employee?._id || uploadTarget?.employee || '';
+
+  const filteredEmployees = useMemo(() => {
+    const blockedSet = new Set(periodPayslipEmployees);
+    return employees.filter((employee) => {
+      if (editingEmployeeId && employee._id === editingEmployeeId) {
+        return true;
+      }
+      return !blockedSet.has(employee._id);
+    });
+  }, [employees, periodPayslipEmployees, editingEmployeeId]);
+
+  const selectedPeriodLabel = useMemo(() => {
+    if (!uploadForm.month || !uploadForm.year) {
+      return 'this period';
+    }
+    return `${new Date(uploadForm.year, uploadForm.month - 1).toLocaleString('default', { month: 'long' })} ${uploadForm.year}`;
+  }, [uploadForm.month, uploadForm.year]);
 
   if (loading) {
     return (
@@ -534,10 +620,23 @@ const Payroll = () => {
                   ))}
                 </select>
               </div>
-              <div className="col-md-3">
+              <div className="col-md-4">
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Search"
+                  value={payslipSearchTerm}
+                  onChange={(event) => setPayslipSearchTerm(event.target.value)}
+                />
+              </div>
+              <div className="col-md-2">
                 <button
                   className="btn btn-outline-secondary w-100"
-                  onClick={() => { setPayslipFilterMonth(''); setPayslipFilterYear(new Date().getFullYear()); }}
+                  onClick={() => {
+                    setPayslipFilterMonth('');
+                    setPayslipFilterYear(new Date().getFullYear());
+                    setPayslipSearchTerm('');
+                  }}
                 >
                   Clear Filters
                 </button>
@@ -563,7 +662,7 @@ const Payroll = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedPayslipRows.map((payslip) => {
+                    {filteredPayslipRows.map((payslip) => {
                       const uploadedByLabel = payslip.uploadedBy?.firstName
                         ? `${payslip.uploadedBy.firstName} ${payslip.uploadedBy.lastName || ''}`.trim()
                         : (payslip.uploadedBy ? 'Finance Team' : '--');
@@ -605,10 +704,16 @@ const Payroll = () => {
                     })}
                   </tbody>
                 </table>
-                {sortedPayslipRows.length === 0 && (
+                {filteredPayslipRows.length === 0 && (
                   <div className="text-center py-5 text-muted">
                     <i className="bi bi-file-earmark-text fs-1 d-block mb-2"></i>
-                    <p>{canUploadPayslips ? 'No payslips found for the selected filters.' : 'Payslips will appear here once Finance uploads them.'}</p>
+                    <p>
+                      {canUploadPayslips
+                        ? payslipSearchTerm
+                          ? 'No payslips match your search.'
+                          : 'No payslips found for the selected filters.'
+                        : 'Payslips will appear here once Finance uploads them.'}
+                    </p>
                   </div>
                 )}
               </div>
@@ -718,12 +823,23 @@ const Payroll = () => {
                       required
                     >
                       <option value="">Select employee</option>
-                      {employees.map((employee) => (
+                      {filteredEmployees.map((employee) => (
                         <option key={employee._id} value={employee._id}>
                           {employee.firstName} {employee.lastName} ({employee.employeeId})
                         </option>
                       ))}
                     </select>
+                    {periodLookupLoading && (
+                      <small className="text-muted d-block mt-1">Checking who still needs a payslip for this period...</small>
+                    )}
+                    {!periodLookupLoading && filteredEmployees.length === 0 && (
+                      <small className="text-danger d-block mt-1">
+                        Everyone already has a payslip for {selectedPeriodLabel}.
+                      </small>
+                    )}
+                    {periodLookupError && (
+                      <div className="alert alert-warning mt-2 mb-0">{periodLookupError}</div>
+                    )}
                   </div>
                   <div className="row g-3">
                     <div className="col-md-6">
