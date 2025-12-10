@@ -89,9 +89,7 @@ const Payroll = () => {
     ? FINANCE_DEPARTMENT_NAMES.includes(currentDepartmentName)
     : false;
   const canManage = currentUser?.managementLevel >= 2; // Only L2 and L3 can manage payroll
-  const canUploadPayslips = currentUser
-    ? currentUser.managementLevel >= 4 || (currentUser.managementLevel >= 3 && isFinanceUploader)
-    : false;
+  const canUploadPayslips = currentUser?.managementLevel === 3 && isFinanceUploader;
 
   useEffect(() => {
     fetchPayrolls();
