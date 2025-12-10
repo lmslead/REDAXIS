@@ -24,8 +24,20 @@ export const EMPLOYEE_DOCUMENT_TYPES = [
     label: 'Experience Letter',
     description: 'Experience certificate handed over on exit',
   },
+  {
+    key: 'pan_card_document',
+    label: 'PAN Card Proof',
+    description: 'Government-approved PAN card copy uploaded by the employee',
+    allowSelfUpload: true,
+  },
+  {
+    key: 'aadhar_card_document',
+    label: 'Aadhar Card Proof',
+    description: 'Official Aadhar card copy uploaded by the employee',
+    allowSelfUpload: true,
+  },
 ];
 
 export const EMPLOYEE_DOCUMENT_TYPE_VALUES = EMPLOYEE_DOCUMENT_TYPES.map((item) => item.key);
 
-export const EMPLOYEE_DOCUMENT_FOLDER = process.env.EMPLOYEE_DOCUMENT_FOLDER || 'employee-documents';
+export const EMPLOYEE_DOCUMENT_FOLDER = process.env.EMPLOYEE_DOCUMENT_FOLDER || '';

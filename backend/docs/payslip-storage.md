@@ -10,8 +10,11 @@ REDAXIS/
 ├── public/
 ├── src/
 └── payslips/
-	├── RG0123/2024_12/*.pdf.gz  ← payslips stay here
-	└── employee-documents/      ← new letter uploads live here
+	└── RG0123/
+		├── 2024_12/*.pdf.gz         ← monthly payslips
+		├── offer_letter/*.pdf.gz    ← L3 uploads
+		├── pan_card_document/*.pdf.gz
+		└── aadhar_card_document/*.pdf.gz
 ```
 
 If the `payslips` directory does not exist yet, create it once (from the root of the deployment):
@@ -25,7 +28,7 @@ The server resolves the folder from `PAYSLIP_STORAGE_PATH` in `backend/.env`. By
 
 ## Employment documents
 
-Offer/appointment/confirmation/relieving/experience letters use the exact same storage root but under the `employee-documents` sub-folder. Each upload is compressed (`.pdf.gz`) inside `payslips/employee-documents/<EMPLOYEE_ID>/<docType>/`. Set `EMPLOYEE_DOCUMENT_FOLDER` if you need to rename that child folder.
+Offer/appointment/confirmation/relieving/experience letters plus Aadhaar/PAN proofs now live directly inside each employee’s payslip directory: `payslips/<EMPLOYEE_ID>/<docType>/`. Each upload is still compressed (`.pdf.gz`). If you prefer isolating them under a separate sub-folder, set `EMPLOYEE_DOCUMENT_FOLDER` in `backend/.env` (leave it blank to keep sharing the payslip folder).
 
 ## Compression workflow
 
@@ -44,8 +47,8 @@ Only L3 users mapped to a Finance department (configurable via `FINANCE_DEPARTME
 ```
 PAYSLIP_STORAGE_PATH=../payslips
 FINANCE_DEPARTMENT_NAMES=Finance
-EMPLOYEE_DOCUMENT_FOLDER=employee-documents
+EMPLOYEE_DOCUMENT_FOLDER=
 ```
 
 Override `PAYSLIP_STORAGE_PATH` if you relocate the storage folder, and extend `FINANCE_DEPARTMENT_NAMES` with comma-separated aliases if Finance uses multiple department names.
-`EMPLOYEE_DOCUMENT_FOLDER` lets you rename the sub-directory used for offer/appointment/confirmation/relieving/experience letters without touching the overall storage root.
+`EMPLOYEE_DOCUMENT_FOLDER` is optional; leave it empty to save documents alongside payslips per employee, or set a name (for example `employee-documents`) if you want everything under a dedicated sub-folder.

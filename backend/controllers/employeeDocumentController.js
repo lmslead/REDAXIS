@@ -21,7 +21,9 @@ const isL3User = (user) => (user?.managementLevel || 0) >= 3;
 
 const resolveEmployeeDirectory = async (employeeCode, docTypeKey) => {
   const storageRoot = await getWritableStorageRoot();
-  const documentsRoot = path.join(storageRoot, EMPLOYEE_DOCUMENT_FOLDER);
+  const documentsRoot = EMPLOYEE_DOCUMENT_FOLDER
+    ? path.join(storageRoot, EMPLOYEE_DOCUMENT_FOLDER)
+    : storageRoot;
   await ensureDirectoryExists(documentsRoot);
 
   const employeeDir = path.join(documentsRoot, employeeCode);
@@ -69,13 +71,11 @@ export const listEmployeeDocuments = async (req, res) => {
 
 export const uploadEmployeeDocument = async (req, res) => {
   try {
-    if (!isL3User(req.user)) {
-      return res.status(403).json({ success: false, message: 'Only L3 users can upload documents' });
-    }
-
     const { employeeId, docType } = req.body;
+    const canManage = isL3User(req.user);
+    const targetEmployeeId = employeeId || (!canManage ? req.user?._id?.toString() : null);
 
-    if (!employeeId || !docType) {
+    if (!targetEmployeeId || !docType) {
       return res.status(400).json({ success: false, message: 'Employee and document type are required' });
     }
 
@@ -83,13 +83,26 @@ export const uploadEmployeeDocument = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Unsupported document type' });
     }
 
+    const docConfig = DOC_TYPE_LOOKUP.get(docType);
+
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Document PDF is required' });
     }
 
-    const employee = await User.findById(employeeId).select('employeeId firstName lastName status');
+    const employee = await User.findById(targetEmployeeId).select('employeeId firstName lastName status');
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Employee record not found' });
+    }
+
+    const isOwner = employee._id.equals(req.user._id);
+
+    if (!canManage) {
+      if (!docConfig?.allowSelfUpload) {
+        return res.status(403).json({ success: false, message: 'You cannot upload this document type' });
+      }
+      if (!isOwner) {
+        return res.status(403).json({ success: false, message: 'You can only upload your own documents' });
+      }
     }
 
     let targetDir;
@@ -116,12 +129,12 @@ export const uploadEmployeeDocument = async (req, res) => {
 
     await fs.promises.writeFile(destination, compressedBuffer);
 
-    const existingDocument = await EmployeeDocument.findOne({ employee: employeeId, docType });
+    const existingDocument = await EmployeeDocument.findOne({ employee: targetEmployeeId, docType });
 
     const documentRecord = await EmployeeDocument.findOneAndUpdate(
-      { employee: employeeId, docType },
+      { employee: targetEmployeeId, docType },
       {
-        employee: employeeId,
+        employee: targetEmployeeId,
         docType,
         fileName: finalFileName,
         filePath: destination,

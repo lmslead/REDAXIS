@@ -5,7 +5,7 @@ import {
   uploadEmployeeDocument,
   downloadEmployeeDocument,
 } from '../controllers/employeeDocumentController.js';
-import { protect, authorizeLevel } from '../middleware/auth.js';
+import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -21,7 +21,7 @@ const upload = multer({
 });
 
 router.get('/', protect, listEmployeeDocuments);
-router.post('/', protect, authorizeLevel(3), upload.single('document'), uploadEmployeeDocument);
+router.post('/', protect, upload.single('document'), uploadEmployeeDocument);
 router.get('/:id/download', protect, downloadEmployeeDocument);
 
 export default router;

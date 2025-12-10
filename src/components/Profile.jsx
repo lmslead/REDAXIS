@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { authAPI, employeeDocumentsAPI } from '../services/api';
 import './Profile.css';
 
@@ -52,6 +52,9 @@ const Profile = () => {
   const [documentTypes, setDocumentTypes] = useState([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [documentsError, setDocumentsError] = useState('');
+  const [docUploadError, setDocUploadError] = useState('');
+  const [uploadingDocType, setUploadingDocType] = useState(null);
+  const fileInputRefs = useRef({});
 
   const handleFieldChange = (field, value) => {
     setFormData((prev) => ({
@@ -187,6 +190,54 @@ const Profile = () => {
     }
   };
 
+  const triggerDocumentUpload = (docType) => {
+    setDocUploadError('');
+    const inputRef = fileInputRefs.current[docType];
+    if (inputRef) {
+      inputRef.value = '';
+      inputRef.click();
+    }
+  };
+
+  const handleDocumentFileChange = async (docType, event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (file.type !== 'application/pdf') {
+      setDocUploadError('Only PDF files are allowed');
+      event.target.value = '';
+      return;
+    }
+
+    if (!user?._id) {
+      setDocUploadError('User session expired. Please re-login.');
+      event.target.value = '';
+      return;
+    }
+
+    setUploadingDocType(docType);
+    setDocUploadError('');
+    try {
+      await employeeDocumentsAPI.upload({
+        employeeId: user._id,
+        docType,
+        file,
+      });
+      alert('Document uploaded successfully!');
+      await fetchEmploymentDocuments();
+    } catch (error) {
+      setDocUploadError(error.message || 'Failed to upload document');
+    } finally {
+      setUploadingDocType(null);
+      event.target.value = '';
+    }
+  };
+
+  const selfUploadDocumentTypes = documentTypes.filter((type) => type.allowSelfUpload);
+  const sharedDocumentTypes = documentTypes.filter((type) => !type.allowSelfUpload);
+
   if (loading) {
     return (
       <div className="d-flex justify-content-center align-items-center" style={{ height: '400px' }}>
@@ -283,59 +334,137 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* Employment Documents */}
-          <div className="card border-0 shadow-sm mt-3">
-            <div className="card-body profile-documents-card">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h6 className="fw-bold mb-0">Employment Letters</h6>
-                {documentsLoading && (
-                  <span className="spinner-border spinner-border-sm text-primary" role="status">
-                    <span className="visually-hidden">Loading...</span>
-                  </span>
+          {(sharedDocumentTypes.length > 0 || documentsLoading || documentsError) && (
+            <div className="card border-0 shadow-sm mt-3">
+              <div className="card-body profile-documents-card">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h6 className="fw-bold mb-0">Employment Letters</h6>
+                  {documentsLoading && (
+                    <span className="spinner-border spinner-border-sm text-primary" role="status">
+                      <span className="visually-hidden">Loading...</span>
+                    </span>
+                  )}
+                </div>
+                {documentsError && (
+                  <div className="alert alert-warning py-2">{documentsError}</div>
+                )}
+                {!documentsError && (
+                  <div className="profile-document-list">
+                    {sharedDocumentTypes.length === 0 && !documentsLoading && (
+                      <p className="text-muted small mb-0">No employment letter types configured yet.</p>
+                    )}
+                    {sharedDocumentTypes.map((type) => {
+                      const record = documentRecords.find((doc) => doc.docType === type.key);
+                      const uploadedDate = record?.uploadedAt ? new Date(record.uploadedAt) : null;
+                      return (
+                        <div
+                          className={`profile-document-row ${record ? 'ready' : 'pending'}`}
+                          key={type.key}
+                        >
+                          <div>
+                            <div className="profile-document-title">{type.label}</div>
+                            <small className="text-muted">
+                              {record
+                                ? `Updated on ${uploadedDate ? uploadedDate.toLocaleDateString() : 'N/A'}`
+                                : type.description}
+                            </small>
+                          </div>
+                          {record ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => handleDownloadDocument(record)}
+                            >
+                              <i className="bi bi-eye me-1"></i>View
+                            </button>
+                          ) : (
+                            <span className="badge bg-secondary">Pending</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-              {documentsError && (
-                <div className="alert alert-warning py-2">{documentsError}</div>
-              )}
-              {!documentsError && (
-                <div className="profile-document-list">
-                  {documentTypes.length === 0 && !documentsLoading && (
-                    <p className="text-muted small mb-0">No employment letter types configured yet.</p>
-                  )}
-                  {documentTypes.map((type) => {
-                    const record = documentRecords.find((doc) => doc.docType === type.key);
-                    const uploadedDate = record?.uploadedAt ? new Date(record.uploadedAt) : null;
-                    return (
-                      <div
-                        className={`profile-document-row ${record ? 'ready' : 'pending'}`}
-                        key={type.key}
-                      >
-                        <div>
-                          <div className="profile-document-title">{type.label}</div>
-                          <small className="text-muted">
-                            {record
-                              ? `Updated on ${uploadedDate ? uploadedDate.toLocaleDateString() : 'N/A'}`
-                              : type.description}
-                          </small>
-                        </div>
-                        {record ? (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={() => handleDownloadDocument(record)}
-                          >
-                            <i className="bi bi-eye me-1"></i>View
-                          </button>
-                        ) : (
-                          <span className="badge bg-secondary">Pending</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
-          </div>
+          )}
+
+          {selfUploadDocumentTypes.length > 0 && (
+            <div className="card border-0 shadow-sm mt-3">
+              <div className="card-body profile-documents-card">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h6 className="fw-bold mb-0">Identity Documents</h6>
+                  {documentsLoading && (
+                    <span className="spinner-border spinner-border-sm text-primary" role="status">
+                      <span className="visually-hidden">Loading...</span>
+                    </span>
+                  )}
+                </div>
+                {docUploadError && !documentsError && (
+                  <div className="alert alert-danger py-2">{docUploadError}</div>
+                )}
+                {documentsError && (
+                  <div className="alert alert-warning py-2 mb-0">{documentsError}</div>
+                )}
+                {!documentsError && (
+                  <div className="profile-document-list">
+                    {selfUploadDocumentTypes.map((type) => {
+                      const record = documentRecords.find((doc) => doc.docType === type.key);
+                      const uploadedDate = record?.uploadedAt ? new Date(record.uploadedAt) : null;
+                      const isUploading = uploadingDocType === type.key;
+                      return (
+                        <div
+                          className={`profile-document-row ${record ? 'ready' : 'pending'}`}
+                          key={type.key}
+                        >
+                          <div>
+                            <div className="profile-document-title">{type.label}</div>
+                            <small className="text-muted d-block">
+                              {record
+                                ? `Updated on ${uploadedDate ? uploadedDate.toLocaleDateString() : 'N/A'}`
+                                : type.description}
+                            </small>
+                          </div>
+                          <div className="d-flex gap-2 flex-wrap align-items-center">
+                            {record && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary"
+                                onClick={() => handleDownloadDocument(record)}
+                              >
+                                <i className="bi bi-eye me-1"></i>View
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary"
+                              onClick={() => triggerDocumentUpload(type.key)}
+                              disabled={isUploading}
+                            >
+                              {isUploading ? 'Uploading...' : record ? 'Replace PDF' : 'Upload PDF'}
+                            </button>
+                            <input
+                              type="file"
+                              accept="application/pdf"
+                              style={{ display: 'none' }}
+                              ref={(ref) => {
+                                if (ref) {
+                                  fileInputRefs.current[type.key] = ref;
+                                } else {
+                                  delete fileInputRefs.current[type.key];
+                                }
+                              }}
+                              onChange={(event) => handleDocumentFileChange(type.key, event)}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Profile Details */}
