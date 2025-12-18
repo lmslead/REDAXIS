@@ -69,7 +69,7 @@ function App() {
       document.body.style.overflow = "";
       return;
     }
-
+    
     document.body.style.overflow = sidebarOpen ? "hidden" : "";
 
     return () => {
