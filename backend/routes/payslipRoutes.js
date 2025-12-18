@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getPayslips, uploadPayslip, downloadPayslip } from '../controllers/payslipController.js';
+import { getPayslips, uploadPayslip, downloadPayslip, deletePayslip } from '../controllers/payslipController.js';
 import { protect, authorizeFinancePayslipUpload } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -19,5 +19,6 @@ const upload = multer({
 router.get('/', protect, getPayslips);
 router.post('/', protect, authorizeFinancePayslipUpload, upload.single('payslip'), uploadPayslip);
 router.get('/:id/download', protect, downloadPayslip);
+router.delete('/:id', protect, authorizeFinancePayslipUpload, deletePayslip);
 
 export default router;

@@ -210,24 +210,23 @@ const Payroll = () => {
     return `${new Date(record.year, record.month - 1).toLocaleString('default', { month: 'long' })} ${record.year}`;
   };
 
-  const handlePayslipAction = async (payslip) => {
-    if (canUploadPayslips) {
-      try {
-        const blob = await payslipsAPI.download(payslip._id);
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = payslip.fileName || `Payslip_${payslip.employee?.employeeId}_${payslip.month}_${payslip.year}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      } catch (error) {
-        alert(error.message || 'Unable to download payslip');
-      }
-      return;
+  const downloadPayslipFile = async (payslip) => {
+    try {
+      const blob = await payslipsAPI.download(payslip._id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = payslip.fileName || `Payslip_${payslip.employee?.employeeId}_${payslip.month}_${payslip.year}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(error.message || 'Unable to download payslip');
     }
+  };
 
+  const previewPayslip = async (payslip) => {
     const viewerTitleParts = [formatPeriodLabel(payslip), payslip.employee?.employeeId].filter(Boolean);
     const viewerTitle = viewerTitleParts.join(' - ');
     setViewerLoading(true);
@@ -235,7 +234,7 @@ const Payroll = () => {
     setViewerState({ open: true, title: viewerTitle });
 
     try {
-      const blob = await payslipsAPI.download(payslip._id);
+      const blob = await payslipsAPI.download(payslip._id, { preview: true });
       const arrayBuffer = await blob.arrayBuffer();
       const pdf = await getDocument({ data: arrayBuffer }).promise;
       const renderedPages = [];
@@ -257,6 +256,26 @@ const Payroll = () => {
       alert(error.message || 'Unable to display payslip');
     } finally {
       setViewerLoading(false);
+    }
+  };
+
+  const handlePayslipDelete = async (payslip) => {
+    const employeeLabel = `${payslip.employee?.firstName || ''} ${payslip.employee?.lastName || ''}`.trim()
+      || payslip.employee?.employeeId
+      || 'this employee';
+    const confirmation = window.confirm(
+      `Delete the payslip for ${employeeLabel} (${formatPeriodLabel(payslip)})? This action cannot be undone.`
+    );
+    if (!confirmation) {
+      return;
+    }
+
+    try {
+      await payslipsAPI.delete(payslip._id);
+      alert('Payslip deleted successfully');
+      fetchPayslips();
+    } catch (error) {
+      alert(error.message || 'Unable to delete payslip');
     }
   };
 
@@ -682,19 +701,35 @@ const Payroll = () => {
                           <td className="d-flex gap-2 flex-wrap">
                             <button
                               className="btn btn-sm btn-outline-success"
-                              onClick={() => handlePayslipAction(payslip)}
+                              onClick={() => (canUploadPayslips ? downloadPayslipFile(payslip) : previewPayslip(payslip))}
                             >
                               <i className={`bi ${canUploadPayslips ? 'bi-download' : 'bi-eye'} me-1`}></i>
                               {canUploadPayslips ? 'Download' : 'View'}
                             </button>
                             {canUploadPayslips && (
-                              <button
-                                className="btn btn-sm btn-outline-secondary"
-                                onClick={() => openPayslipUploadModal(payslip)}
-                              >
-                                <i className="bi bi-upload me-1"></i>
-                                Replace
-                              </button>
+                              <>
+                                <button
+                                  className="btn btn-sm btn-outline-primary"
+                                  onClick={() => previewPayslip(payslip)}
+                                >
+                                  <i className="bi bi-eye me-1"></i>
+                                  Preview
+                                </button>
+                                <button
+                                  className="btn btn-sm btn-outline-secondary"
+                                  onClick={() => openPayslipUploadModal(payslip)}
+                                >
+                                  <i className="bi bi-upload me-1"></i>
+                                  Replace
+                                </button>
+                                <button
+                                  className="btn btn-sm btn-outline-danger"
+                                  onClick={() => handlePayslipDelete(payslip)}
+                                >
+                                  <i className="bi bi-trash me-1"></i>
+                                  Delete
+                                </button>
+                              </>
                             )}
                           </td>
                         </tr>

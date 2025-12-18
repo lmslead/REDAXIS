@@ -308,9 +308,10 @@ export const payslipsAPI = {
       body: formData,
     });
   },
-  download: async (id) => {
+  download: async (id, options = {}) => {
     const token = getToken();
-    const response = await fetch(`${API_BASE_URL}/payslips/${id}/download`, {
+    const query = options.preview ? '?mode=preview' : '';
+    const response = await fetch(`${API_BASE_URL}/payslips/${id}/download${query}`, {
       method: 'GET',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
@@ -333,6 +334,7 @@ export const payslipsAPI = {
 
     return response.blob();
   },
+  delete: (id) => apiRequest(`/payslips/${id}`, { method: 'DELETE' }),
 };
 
 // Employment Documents API

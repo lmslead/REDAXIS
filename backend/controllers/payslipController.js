@@ -165,7 +165,8 @@ export const downloadPayslip = async (req, res) => {
     }
 
     const safeFileName = payslip.fileName?.replace(/"/g, '') || 'payslip.pdf';
-    const dispositionType = canViewAllPayslips ? 'attachment' : 'inline';
+    const wantsInlinePreview = req.query.mode === 'preview';
+    const dispositionType = wantsInlinePreview || !canViewAllPayslips ? 'inline' : 'attachment';
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Length', pdfBuffer.length);
@@ -176,5 +177,34 @@ export const downloadPayslip = async (req, res) => {
   } catch (error) {
     console.error('Payslip download failed:', error);
     res.status(500).json({ success: false, message: error.message || 'Payslip download failed' });
+  }
+};
+
+export const deletePayslip = async (req, res) => {
+  try {
+    if (!isFinanceL3User(req.user)) {
+      return res.status(403).json({ success: false, message: 'Only Finance L3 users can delete payslips' });
+    }
+
+    const payslip = await Payslip.findById(req.params.id);
+
+    if (!payslip) {
+      return res.status(404).json({ success: false, message: 'Payslip not found' });
+    }
+
+    if (payslip.filePath && fs.existsSync(payslip.filePath)) {
+      try {
+        await fs.promises.unlink(payslip.filePath);
+      } catch (unlinkError) {
+        console.warn('Failed to remove payslip file during delete:', unlinkError.message);
+      }
+    }
+
+    await payslip.deleteOne();
+
+    return res.status(200).json({ success: true, message: 'Payslip deleted successfully' });
+  } catch (error) {
+    console.error('Payslip delete failed:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Payslip delete failed' });
   }
 };
