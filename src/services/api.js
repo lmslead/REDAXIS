@@ -354,9 +354,10 @@ export const employeeDocumentsAPI = {
       body: formData,
     });
   },
-  download: async (id) => {
+  download: async (id, options = {}) => {
     const token = getToken();
-    const response = await fetch(`${API_BASE_URL}/employee-documents/${id}/download`, {
+    const query = options.preview ? '?mode=preview' : '';
+    const response = await fetch(`${API_BASE_URL}/employee-documents/${id}/download${query}`, {
       method: 'GET',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });

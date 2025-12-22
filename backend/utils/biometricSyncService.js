@@ -21,7 +21,7 @@ const escapeRegExp = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'
 
 const normalizeEmpCode = (value = '') => value.trim().toUpperCase();
 
-const daysToMs = (days) => days * 24 * 60 * 60 * 1000;
+const daysToMs = (days) => days * 24 * 60 * 60 * 1000; 
 
 const parseDateInput = (value) => {
   if (!value) return null;

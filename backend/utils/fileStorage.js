@@ -99,6 +99,7 @@ export const readCompressedFile = async (filePath, compression) => {
     }
   }
 
+  
   console.warn('Unsupported document compression marker. Serving raw buffer.', {
     path: filePath,
     compression,

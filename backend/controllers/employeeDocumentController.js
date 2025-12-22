@@ -191,7 +191,8 @@ export const downloadEmployeeDocument = async (req, res) => {
     }
 
     const safeFileName = document.fileName?.replace(/"/g, '') || 'document.pdf';
-    const dispositionType = canManage && !isOwner ? 'attachment' : 'inline';
+    const wantsPreview = req.query.mode === 'preview';
+    const dispositionType = wantsPreview ? 'inline' : (canManage && !isOwner ? 'attachment' : 'inline');
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Length', pdfBuffer.length);

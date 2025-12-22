@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/build/pdf';
 import { employeesAPI, departmentsAPI, teamAPI, assetsAPI, employeeDocumentsAPI } from '../services/api';
 import { getUser } from '../services/api';
 import './Employees.css';
+
+GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 // CSS to remove number input spinners and fix dropdown issues
 const styles = `
@@ -58,10 +61,21 @@ const Employees = () => {
   const [documentForm, setDocumentForm] = useState({ docType: '', file: null });
   const [documentError, setDocumentError] = useState('');
   const [documentInputKey, setDocumentInputKey] = useState(Date.now());
+  const [documentViewerState, setDocumentViewerState] = useState({ open: false, title: '' });
+  const [documentViewerLoading, setDocumentViewerLoading] = useState(false);
+  const [documentViewerPages, setDocumentViewerPages] = useState([]);
+  const [documentViewerError, setDocumentViewerError] = useState('');
   
   const currentUser = getUser();
   const canManage = currentUser?.managementLevel >= 2; // L2, L3, and L4 can manage employees
   const canManageDocuments = currentUser?.managementLevel >= 3;
+  const getDocumentTypeLabel = (docType) => documentTypes.find((type) => type.key === docType)?.label || 'Document';
+  const resetDocumentViewer = () => {
+    setDocumentViewerPages([]);
+    setDocumentViewerError('');
+    setDocumentViewerState({ open: false, title: '' });
+    setDocumentViewerLoading(false);
+  };
   const formatAddress = (addressObj) => {
     if (!addressObj) return 'N/A';
     const parts = [
@@ -191,6 +205,7 @@ const Employees = () => {
     setDocumentTypes([]);
     setDocumentForm({ docType: '', file: null });
     setDocumentError('');
+    resetDocumentViewer();
   };
 
   const handleDocumentUpload = async (e) => {
@@ -242,6 +257,40 @@ const Employees = () => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       alert(error.message || 'Failed to download document');
+    }
+  };
+
+  const handleDocumentPreview = async (record) => {
+    if (!record) return;
+    setDocumentViewerLoading(true);
+    setDocumentViewerError('');
+    setDocumentViewerPages([]);
+    const employeeLabel = documentEmployee?.employeeId || documentEmployee?._id || '';
+    const docLabel = getDocumentTypeLabel(record.docType);
+    setDocumentViewerState({ open: true, title: [docLabel, employeeLabel].filter(Boolean).join(' • ') });
+
+    try {
+      const blob = await employeeDocumentsAPI.download(record._id, { preview: true });
+      const arrayBuffer = await blob.arrayBuffer();
+      const pdf = await getDocument({ data: arrayBuffer }).promise;
+      const renderedPages = [];
+
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: 1.4 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: context, viewport }).promise;
+        renderedPages.push(canvas.toDataURL('image/png'));
+      }
+
+      setDocumentViewerPages(renderedPages);
+    } catch (error) {
+      setDocumentViewerError(error.message || 'Unable to display document');
+    } finally {
+      setDocumentViewerLoading(false);
     }
   };
 
@@ -1290,13 +1339,22 @@ const Employees = () => {
                                           ? `${uploadedDate.toLocaleDateString()} • ${uploadedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                                           : 'Recently updated'}
                                       </strong>
-                                      <button
-                                        type="button"
-                                        className="btn btn-link p-0 small"
-                                        onClick={() => handleDocumentDownload(record)}
-                                      >
-                                        <i className="bi bi-download me-1"></i>Download PDF
-                                      </button>
+                                      <div className="d-flex flex-wrap gap-3 align-items-center">
+                                        <button
+                                          type="button"
+                                          className="btn btn-link p-0 small"
+                                          onClick={() => handleDocumentPreview(record)}
+                                        >
+                                          <i className="bi bi-eye me-1"></i>View PDF
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-link p-0 small"
+                                          onClick={() => handleDocumentDownload(record)}
+                                        >
+                                          <i className="bi bi-download me-1"></i>Download PDF
+                                        </button>
+                                      </div>
                                     </div>
                                   ) : (
                                     <div className="document-meta text-muted small">
@@ -1366,6 +1424,47 @@ const Employees = () => {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={closeDocumentModal}>Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Viewer */}
+      {documentViewerState.open && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-xl modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">{documentViewerState.title || 'Document Preview'}</h5>
+                <button type="button" className="btn-close" onClick={resetDocumentViewer}></button>
+              </div>
+              <div className="modal-body" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+                {documentViewerLoading && (
+                  <div className="d-flex justify-content-center py-4">
+                    <div className="spinner-border text-primary" role="status">
+                      <span className="visually-hidden">Loading...</span>
+                    </div>
+                  </div>
+                )}
+
+                {documentViewerError && (
+                  <div className="alert alert-warning mb-0">{documentViewerError}</div>
+                )}
+
+                {!documentViewerLoading && !documentViewerError && documentViewerPages.length > 0 && (
+                  <div>
+                    {documentViewerPages.map((pageUrl, index) => (
+                      <div key={`doc-page-${index}`} className="mb-4">
+                        <img src={pageUrl} alt={`Document page ${index + 1}`} className="img-fluid border rounded" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!documentViewerLoading && !documentViewerError && documentViewerPages.length === 0 && (
+                  <p className="text-center text-muted mb-0">No pages to display.</p>
+                )}
               </div>
             </div>
           </div>
