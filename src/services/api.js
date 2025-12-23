@@ -1,4 +1,16 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_PUBLIC_BASE_URL = API_BASE_URL.replace(/\/?api$/, '');
+
+export const getPublicAssetUrl = (assetPath = '') => {
+  if (!assetPath) {
+    return '';
+  }
+  if (/^https?:\/\//i.test(assetPath)) {
+    return assetPath;
+  }
+  const normalizedPath = assetPath.startsWith('/') ? assetPath : `/${assetPath}`;
+  return `${API_PUBLIC_BASE_URL}${normalizedPath}`;
+};
 
 // Get token from localStorage
 export const getToken = () => localStorage.getItem('token');
@@ -20,6 +32,12 @@ export const setUser = (user) => localStorage.setItem('user', JSON.stringify(use
 
 // Remove user from localStorage
 export const removeUser = () => localStorage.removeItem('user');
+
+const emitAuthChange = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('rg-auth-changed'));
+  }
+};
 
 // API request helper
 const apiRequest = async (endpoint, options = {}) => {
@@ -81,6 +99,7 @@ export const authAPI = {
     if (data.token) {
       setToken(data.token);
       setUser(data.user);
+      emitAuthChange();
     }
     return data;
   },
@@ -93,6 +112,7 @@ export const authAPI = {
     if (data.token) {
       setToken(data.token);
       setUser(data.user);
+      emitAuthChange();
     }
     return data;
   },
@@ -100,6 +120,7 @@ export const authAPI = {
   logout: () => {
     removeToken();
     removeUser();
+    emitAuthChange();
   },
 
   getMe: () => apiRequest('/auth/me'),
@@ -111,6 +132,7 @@ export const authAPI = {
     });
     if (data.data) {
       setUser(data.data);
+      emitAuthChange();
     }
     return data;
   },
@@ -164,6 +186,29 @@ export const employeesAPI = {
     method: 'PATCH',
     body: JSON.stringify(statusData),
   }),
+  exportJoinings: async (params = {}) => {
+    const token = getToken();
+    const queryString = new URLSearchParams(params).toString();
+    const response = await fetch(`${API_BASE_URL}/employees/export/joinings${queryString ? `?${queryString}` : ''}`, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+
+    if (!response.ok) {
+      let message = 'Failed to export joining data';
+      try {
+        const error = await response.json();
+        if (error?.message) {
+          message = error.message;
+        }
+      } catch (parseError) {
+        // Ignore JSON parse errors and fall back to default message
+      }
+      throw new Error(message);
+    }
+
+    return response.blob();
+  },
 };
 
 // Dashboard API
@@ -173,10 +218,13 @@ export const dashboardAPI = {
 
 // Feed API
 export const feedAPI = {
-  getAll: () => apiRequest('/feed'),
+  getAll: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiRequest(`/feed${queryString ? `?${queryString}` : ''}`);
+  },
   create: (feedData) => apiRequest('/feed', {
     method: 'POST',
-    body: JSON.stringify(feedData),
+    body: feedData instanceof FormData ? feedData : JSON.stringify(feedData),
   }),
   like: (id) => apiRequest(`/feed/${id}/like`, { method: 'POST' }),
   comment: (id, comment) => apiRequest(`/feed/${id}/comment`, {
@@ -441,6 +489,14 @@ export const assetsAPI = {
   }),
 };
 
+export const policiesAPI = {
+  acknowledge: (payload) =>
+    apiRequest('/policies/acknowledge', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};
+
 export default {
   auth: authAPI,
   events: eventsAPI,
@@ -457,4 +513,5 @@ export default {
   team: teamAPI,
   assets: assetsAPI,
   employeeDocuments: employeeDocumentsAPI,
+  policies: policiesAPI,
 };

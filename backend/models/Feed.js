@@ -8,16 +8,44 @@ const feedSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: true,
+    trim: true,
+  },
+  title: {
+    type: String,
+    trim: true,
+  },
+  subtitle: {
+    type: String,
+    trim: true,
   },
   type: {
     type: String,
     enum: ['announcement', 'update', 'achievement', 'event', 'general'],
     default: 'general',
   },
+  layout: {
+    type: String,
+    enum: ['classic', 'spotlight', 'poster'],
+    default: 'classic',
+  },
   attachments: [{
     type: String,
   }],
+  heroImage: {
+    type: String,
+  },
+  accentColor: {
+    type: String,
+    default: '#2563eb',
+  },
+  ctaLabel: {
+    type: String,
+    trim: true,
+  },
+  ctaLink: {
+    type: String,
+    trim: true,
+  },
   likes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

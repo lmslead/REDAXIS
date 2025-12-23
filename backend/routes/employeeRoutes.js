@@ -7,13 +7,15 @@ import {
   deleteEmployee,
   getEmployeeStats,
   updateEmployeeStatus,
+  exportEmployeeJoinings,
 } from '../controllers/employeeController.js';
-import { protect, authorizeLevel } from '../middleware/auth.js';
+import { protect, authorizeLevel, authorizeHRDepartment } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Stats require L2+ (Senior Manager and Admin)
 router.get('/stats', protect, authorizeLevel(2), getEmployeeStats);
+router.get('/export/joinings', protect, authorizeHRDepartment, exportEmployeeJoinings);
 
 // Get employees - handled internally based on level (all can view based on their access)
 router.get('/', protect, getEmployees);

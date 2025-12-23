@@ -50,6 +50,7 @@ export const sendTokenResponse = (user, statusCode, res) => {
       personalEmail: user.personalEmail,
       currentAddress: user.currentAddress,
       permanentAddress: user.permanentAddress,
+      policyAcknowledgements: user.policyAcknowledgements,
     },
   });
 };

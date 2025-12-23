@@ -1,11 +1,12 @@
 import express from 'express';
-import { protect } from '../middleware/auth.js';
+import { protect, authorizeHRDepartment } from '../middleware/auth.js';
 import {
   submitResignation,
   getResignations,
   getResignation,
   updateResignationStatus,
   updateExitProcedure,
+  exportResignationsCsv,
 } from '../controllers/resignationController.js';
 
 const router = express.Router();
@@ -13,6 +14,9 @@ const router = express.Router();
 router.route('/')
   .get(protect, getResignations)
   .post(protect, submitResignation);
+
+router.route('/export')
+  .get(protect, authorizeHRDepartment, exportResignationsCsv);
 
 router.route('/:id')
   .get(protect, getResignation);

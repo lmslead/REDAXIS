@@ -1,0 +1,57 @@
+.screenshot-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  pointer-events: none;
+  background: transparent;
+  transition: background 0.25s ease;
+}
+
+.screenshot-shield__watermark {
+  position: absolute;
+  inset: -20%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+  font-size: clamp(0.7rem, 1vw, 0.95rem);
+  font-weight: 600;
+  color: rgba(6, 24, 80, 0.15);
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  transform: rotate(-18deg);
+  gap: 1.25rem;
+  user-select: none;
+}
+
+.screenshot-shield__watermark span {
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.screenshot-shield--flash {
+  background: rgba(255, 255, 255, 0.78);
+  animation: screenshotShieldPulse 0.7s ease;
+}
+
+.screenshot-shield--flash .screenshot-shield__watermark {
+  color: rgba(6, 24, 80, 0.22);
+}
+
+@keyframes screenshotShieldPulse {
+  0% {
+    background: rgba(255, 255, 255, 0.9);
+  }
+  60% {
+    background: rgba(255, 255, 255, 0.4);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screenshot-shield--flash {
+    animation: none;
+  }
+}

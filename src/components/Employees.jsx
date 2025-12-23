@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/build/pdf';
 import { employeesAPI, departmentsAPI, teamAPI, assetsAPI, employeeDocumentsAPI } from '../services/api';
 import { getUser } from '../services/api';
+import { isHumanResourcesUser } from '../utils/hrAccess';
 import './Employees.css';
 
 GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -48,7 +49,6 @@ const Employees = () => {
   const [editEmployee, setEditEmployee] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDept, setFilterDept] = useState('');
-  const [filterRole, setFilterRole] = useState('');
   const [canViewSensitiveData, setCanViewSensitiveData] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewEmployee, setViewEmployee] = useState(null);
@@ -65,10 +65,23 @@ const Employees = () => {
   const [documentViewerLoading, setDocumentViewerLoading] = useState(false);
   const [documentViewerPages, setDocumentViewerPages] = useState([]);
   const [documentViewerError, setDocumentViewerError] = useState('');
+  const today = new Date();
+  const [joiningExportFilters, setJoiningExportFilters] = useState({
+    mode: 'month',
+    month: String(today.getMonth() + 1),
+    quarter: String(Math.floor(today.getMonth() / 3) + 1),
+    year: String(today.getFullYear()),
+    status: 'all',
+    department: '',
+    startDate: '',
+    endDate: '',
+  });
+  const [exportingJoinings, setExportingJoinings] = useState(false);
   
   const currentUser = getUser();
   const canManage = currentUser?.managementLevel >= 2; // L2, L3, and L4 can manage employees
   const canManageDocuments = currentUser?.managementLevel >= 3;
+  const canExportJoinings = isHumanResourcesUser(currentUser);
   const getDocumentTypeLabel = (docType) => documentTypes.find((type) => type.key === docType)?.label || 'Document';
   const resetDocumentViewer = () => {
     setDocumentViewerPages([]);
@@ -189,6 +202,85 @@ const Employees = () => {
       setDocumentTypes([]);
     } finally {
       setDocumentLoading(false);
+    }
+  };
+
+  const handleJoiningExportFilterChange = (field, value) => {
+    setJoiningExportFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const buildJoiningExportParams = () => {
+    const params = { dateField: 'joiningDate' };
+    const {
+      mode,
+      month,
+      quarter,
+      year,
+      startDate,
+      endDate,
+      status,
+      department,
+    } = joiningExportFilters;
+
+    if (mode === 'month') {
+      if (!month || !year) {
+        throw new Error('Select both month and year to export joinings.');
+      }
+      params.month = month;
+      params.year = year;
+    } else if (mode === 'quarter') {
+      if (!quarter || !year) {
+        throw new Error('Select both quarter and year to export joinings.');
+      }
+      params.quarter = quarter;
+      params.year = year;
+    } else if (mode === 'year') {
+      if (!year) {
+        throw new Error('Enter the year to export joinings.');
+      }
+      params.year = year;
+    } else if (mode === 'custom') {
+      if (!startDate && !endDate) {
+        throw new Error('Provide a start date, end date, or both for custom exports.');
+      }
+      if (startDate) {
+        params.startDate = startDate;
+      }
+      if (endDate) {
+        params.endDate = endDate;
+      }
+    } else {
+      throw new Error('Select a valid filter type for exporting joinings.');
+    }
+
+    if (status && status !== 'all') {
+      params.status = status;
+    }
+
+    if (department) {
+      params.departmentId = department;
+    }
+
+    return params;
+  };
+
+  const handleJoiningExport = async () => {
+    try {
+      setExportingJoinings(true);
+      const params = buildJoiningExportParams();
+      const blob = await employeesAPI.exportJoinings(params);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `employee-joinings-${Date.now()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(error.message || 'Failed to export joining data');
+    } finally {
+      setExportingJoinings(false);
     }
   };
 
@@ -452,8 +544,7 @@ const Employees = () => {
                          emp.personalEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          emp.employeeId?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = !filterDept || emp.department?._id === filterDept;
-    const matchesRole = !filterRole || emp.role === filterRole;
-    return matchesSearch && matchesDept && matchesRole;
+    return matchesSearch && matchesDept;
   });
 
   if (loading) {
@@ -484,11 +575,159 @@ const Employees = () => {
         )}
       </div>
 
+      {canExportJoinings && (
+        <div className="card border-0 shadow-sm mb-4 joining-export-card">
+          <div className="card-body py-3 px-3">
+            <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+              <div className="d-flex align-items-center gap-2">
+                <div className="joining-export-icon">
+                  <i className="bi bi-clipboard-data"></i>
+                </div>
+                <div>
+                  <h6 className="mb-0">Joining Export</h6>
+                  <small className="text-muted">Quarterly / Monthly / Custom</small>
+                </div>
+              </div>
+              <button
+                className="btn btn-sm btn-outline-primary ms-auto"
+                onClick={handleJoiningExport}
+                disabled={exportingJoinings}
+              >
+                {exportingJoinings ? (
+                  <span>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Preparing
+                  </span>
+                ) : (
+                  <span>
+                    <i className="bi bi-download me-1"></i>Export CSV
+                  </span>
+                )}
+              </button>
+            </div>
+            <div className="joining-export-fields">
+              <div className="joining-export-field">
+                <label className="form-label small fw-semibold">Filter Type</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={joiningExportFilters.mode}
+                  onChange={(e) => handleJoiningExportFilterChange('mode', e.target.value)}
+                >
+                  <option value="month">Month</option>
+                  <option value="quarter">Quarter</option>
+                  <option value="year">Year</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+              </div>
+
+              {(joiningExportFilters.mode === 'month' || joiningExportFilters.mode === 'quarter' || joiningExportFilters.mode === 'year') && (
+                <div className="joining-export-field">
+                  <label className="form-label small fw-semibold">Year</label>
+                  <input
+                    type="number"
+                    className="form-control form-control-sm"
+                    min="2000"
+                    max="3000"
+                    value={joiningExportFilters.year}
+                    onChange={(e) => handleJoiningExportFilterChange('year', e.target.value)}
+                  />
+                </div>
+              )}
+
+              {joiningExportFilters.mode === 'month' && (
+                <div className="joining-export-field">
+                  <label className="form-label small fw-semibold">Month</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={joiningExportFilters.month}
+                    onChange={(e) => handleJoiningExportFilterChange('month', e.target.value)}
+                  >
+                    {Array.from({ length: 12 }).map((_, index) => (
+                      <option key={index + 1} value={String(index + 1)}>
+                        {new Date(0, index).toLocaleString('default', { month: 'short' })}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {joiningExportFilters.mode === 'quarter' && (
+                <div className="joining-export-field">
+                  <label className="form-label small fw-semibold">Quarter</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={joiningExportFilters.quarter}
+                    onChange={(e) => handleJoiningExportFilterChange('quarter', e.target.value)}
+                  >
+                    {[1, 2, 3, 4].map((quarter) => (
+                      <option key={quarter} value={String(quarter)}>
+                        Q{quarter}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {joiningExportFilters.mode === 'custom' && (
+                <>
+                  <div className="joining-export-field">
+                    <label className="form-label small fw-semibold">Start Date</label>
+                    <input
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={joiningExportFilters.startDate}
+                      onChange={(e) => handleJoiningExportFilterChange('startDate', e.target.value)}
+                    />
+                  </div>
+                  <div className="joining-export-field">
+                    <label className="form-label small fw-semibold">End Date</label>
+                    <input
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={joiningExportFilters.endDate}
+                      onChange={(e) => handleJoiningExportFilterChange('endDate', e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="joining-export-field">
+                <label className="form-label small fw-semibold">Status</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={joiningExportFilters.status}
+                  onChange={(e) => handleJoiningExportFilterChange('status', e.target.value)}
+                >
+                  <option value="all">All</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="on-leave">On Leave</option>
+                </select>
+              </div>
+
+              <div className="joining-export-field">
+                <label className="form-label small fw-semibold">Department</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={joiningExportFilters.department}
+                  onChange={(e) => handleJoiningExportFilterChange('department', e.target.value)}
+                >
+                  <option value="">All</option>
+                  {departments.map((dept) => (
+                    <option key={dept._id} value={dept._id}>{dept.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-body">
           <div className="row g-3">
-            <div className="col-md-4">
+            <div className="col-md-6">
               <input
                 type="text"
                 className="form-control"
@@ -497,7 +736,7 @@ const Employees = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="col-md-3">
+            <div className="col-md-4">
               <select
                 className="form-select"
                 value={filterDept}
@@ -509,22 +748,10 @@ const Employees = () => {
                 ))}
               </select>
             </div>
-            <div className="col-md-3">
-              <select
-                className="form-select"
-                value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-              >
-                <option value="">All Roles</option>
-                <option value="admin">Admin</option>
-                <option value="hr">HR</option>
-                <option value="employee">Employee</option>
-              </select>
-            </div>
             <div className="col-md-2">
               <button
                 className="btn btn-outline-secondary w-100"
-                onClick={() => { setSearchTerm(''); setFilterDept(''); setFilterRole(''); }}
+                onClick={() => { setSearchTerm(''); setFilterDept(''); }}
               >
                 Clear Filters
               </button>

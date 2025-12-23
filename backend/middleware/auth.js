@@ -6,6 +6,11 @@ const FINANCE_DEPARTMENT_NAMES = (process.env.FINANCE_DEPARTMENT_NAMES || 'Finan
   .map((name) => name.trim().toLowerCase())
   .filter(Boolean);
 
+const HR_DEPARTMENT_NAMES = (process.env.HR_DEPARTMENT_NAMES || 'Human Resources,Human Resource,HR,People Operations')
+  .split(',')
+  .map((name) => name.trim().toLowerCase())
+  .filter(Boolean);
+
 export const normalizeDepartmentName = (department) => {
   if (!department) return '';
   if (typeof department === 'string') {
@@ -31,6 +36,24 @@ export const isFinanceL3User = (user) => {
   const departmentName = normalizeDepartmentName(user.department);
 
   return Boolean(departmentName && FINANCE_DEPARTMENT_NAMES.includes(departmentName));
+};
+
+export const isHRDepartmentUser = (user) => {
+  if (!user) {
+    return false;
+  }
+
+  if (user.role === 'hr') {
+    return true;
+  }
+
+  const departmentName = normalizeDepartmentName(user.department);
+
+  if (!departmentName) {
+    return false;
+  }
+
+  return HR_DEPARTMENT_NAMES.includes(departmentName);
 };
 
 export const protect = async (req, res, next) => {
@@ -135,4 +158,19 @@ export const authorizeFinancePayslipUpload = async (req, res, next) => {
     console.error('authorizeFinancePayslipUpload failed:', error);
     return res.status(500).json({ success: false, message: 'Unable to verify finance permissions' });
   }
+};
+
+export const authorizeHRDepartment = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'User session invalid. Please re-login.' });
+  }
+
+  if (isHRDepartmentUser(req.user)) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: 'Access restricted to Human Resources department members only',
+  });
 };

@@ -1,6 +1,140 @@
 import Resignation from '../models/Resignation.js';
 import User from '../models/User.js';
 
+const VALID_DATE_FIELDS = ['lastWorkingDate', 'resignationDate'];
+
+const parseInteger = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const buildDateRange = (query) => {
+  const month = parseInteger(query.month);
+  const quarter = parseInteger(query.quarter);
+  const year = parseInteger(query.year);
+  const hasCustomDates = Boolean(query.startDate || query.endDate);
+
+  const throwValidationError = (message) => {
+    const error = new Error(message);
+    error.statusCode = 400;
+    throw error;
+  };
+
+  if (month !== null) {
+    if (month < 1 || month > 12) {
+      throwValidationError('Month must be between 1 and 12');
+    }
+    const targetYear = year ?? new Date().getFullYear();
+    if (targetYear < 1970 || targetYear > 3000) {
+      throwValidationError('Year is out of supported range');
+    }
+    const start = new Date(Date.UTC(targetYear, month - 1, 1));
+    const end = new Date(Date.UTC(targetYear, month, 0, 23, 59, 59, 999));
+    return { start, end };
+  }
+
+  if (quarter !== null) {
+    if (quarter < 1 || quarter > 4) {
+      throwValidationError('Quarter must be between 1 and 4');
+    }
+    const targetYear = year ?? new Date().getFullYear();
+    if (targetYear < 1970 || targetYear > 3000) {
+      throwValidationError('Year is out of supported range');
+    }
+    const startMonth = (quarter - 1) * 3;
+    const start = new Date(Date.UTC(targetYear, startMonth, 1));
+    const end = new Date(Date.UTC(targetYear, startMonth + 3, 0, 23, 59, 59, 999));
+    return { start, end };
+  }
+
+  if (year !== null) {
+    if (year < 1970 || year > 3000) {
+      throwValidationError('Year is out of supported range');
+    }
+    const start = new Date(Date.UTC(year, 0, 1));
+    const end = new Date(Date.UTC(year + 1, 0, 0, 23, 59, 59, 999));
+    return { start, end };
+  }
+
+  if (hasCustomDates) {
+    let start;
+    let end;
+
+    if (query.startDate) {
+      start = new Date(query.startDate);
+      if (Number.isNaN(start.getTime())) {
+        throwValidationError('Invalid startDate parameter');
+      }
+    }
+
+    if (query.endDate) {
+      end = new Date(query.endDate);
+      if (Number.isNaN(end.getTime())) {
+        throwValidationError('Invalid endDate parameter');
+      }
+      end.setHours(23, 59, 59, 999);
+    }
+
+    if (start && end && start > end) {
+      throwValidationError('startDate cannot be greater than endDate');
+    }
+
+    return { start, end };
+  }
+
+  return null;
+};
+
+const formatDate = (date) => {
+  if (!date) {
+    return '';
+  }
+  const parsed = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+  return parsed.toISOString().split('T')[0];
+};
+
+const escapeCsvValue = (value) => {
+  if (value === null || value === undefined) {
+    return '""';
+  }
+  const stringValue = String(value ?? '');
+  if (!stringValue.length) {
+    return '""';
+  }
+  return `"${stringValue.replace(/"/g, '""')}"`;
+};
+
+const buildCsvContent = (headers, rows) => {
+  const headerRow = headers.map(({ label }) => escapeCsvValue(label)).join(',');
+  const dataRows = rows.map((row) =>
+    headers.map(({ key }) => escapeCsvValue(row[key] ?? '')).join(',')
+  );
+  return [headerRow, ...dataRows].join('\n');
+};
+
+const calculateNoticePeriodDays = (resignationDate, lastWorkingDate) => {
+  if (!resignationDate || !lastWorkingDate) {
+    return '';
+  }
+  const start = new Date(resignationDate);
+  const end = new Date(lastWorkingDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return '';
+  }
+  const diffMs = end - start;
+  if (Number.isNaN(diffMs)) {
+    return '';
+  }
+  const diffDays = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+  return diffDays;
+};
+
 // @desc    Submit resignation
 // @route   POST /api/resignations
 // @access  Private
@@ -268,5 +402,167 @@ export const updateExitProcedure = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Export resignations as CSV with filters
+// @route   GET /api/resignations/export
+// @access  Private (Human Resources dept only)
+export const exportResignationsCsv = async (req, res) => {
+  try {
+    const {
+      status,
+      departmentId,
+      departmentName,
+      dateField: requestedDateField,
+    } = req.query;
+
+    const dateField = VALID_DATE_FIELDS.includes(requestedDateField)
+      ? requestedDateField
+      : 'lastWorkingDate';
+
+    const query = {};
+
+    const dateRange = buildDateRange(req.query);
+    if (dateRange) {
+      query[dateField] = {};
+      if (dateRange.start) {
+        query[dateField].$gte = dateRange.start;
+      }
+      if (dateRange.end) {
+        query[dateField].$lte = dateRange.end;
+      }
+      if (!Object.keys(query[dateField]).length) {
+        delete query[dateField];
+      }
+    }
+
+    if (status) {
+      const allowedStatuses = ['pending', 'approved', 'rejected', 'completed'];
+      const statusFilters = status
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter((item) => allowedStatuses.includes(item));
+
+      if (!statusFilters.length) {
+        const error = new Error('Invalid status filter provided');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      query.status = statusFilters.length === 1 ? statusFilters[0] : { $in: statusFilters };
+    }
+
+    const resignations = await Resignation.find(query)
+      .populate({
+        path: 'employee',
+        select: 'firstName lastName employeeId email department position managementLevel',
+        populate: { path: 'department', select: 'name' },
+      })
+      .populate('approvedBy', 'firstName lastName employeeId email')
+      .lean();
+
+    const filteredByDepartment = resignations.filter((record) => record.employee);
+
+    const normalizedDepartmentName = departmentName?.trim().toLowerCase();
+
+    const finalResignations = filteredByDepartment.filter((record) => {
+      const employeeDepartment = record.employee?.department;
+
+      if (departmentId && employeeDepartment?._id?.toString() !== departmentId) {
+        return false;
+      }
+
+      if (normalizedDepartmentName) {
+        const comparesTo = (employeeDepartment?.name || '').trim().toLowerCase();
+        if (comparesTo !== normalizedDepartmentName) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    const exitProcedureKeys = ['assetReturn', 'exitInterview', 'knowledgeTransfer', 'clearance', 'finalSettlement'];
+
+    const rows = finalResignations.map((record) => {
+      const employee = record.employee || {};
+      const approvedBy = record.approvedBy || {};
+      const exitProcedures = record.exitProcedures || {};
+
+      const row = {
+        employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
+        employeeId: employee.employeeId || '',
+        employeeEmail: employee.email || '',
+        department: employee.department?.name || '',
+        position: employee.position || '',
+        managementLevel: typeof employee.managementLevel === 'number' ? `L${employee.managementLevel}` : '',
+        status: record.status,
+        resignationDate: formatDate(record.resignationDate),
+        lastWorkingDate: formatDate(record.lastWorkingDate),
+        noticePeriodDays: calculateNoticePeriodDays(record.resignationDate, record.lastWorkingDate),
+        reason: record.reason || '',
+        approvedBy: `${approvedBy.firstName || ''} ${approvedBy.lastName || ''}`.trim(),
+        approvedByEmployeeId: approvedBy.employeeId || '',
+        approvalDate: formatDate(record.approvalDate),
+        approvalRemarks: record.approvalRemarks || '',
+      };
+
+      exitProcedureKeys.forEach((key) => {
+        const procedure = exitProcedures[key] || {};
+        row[`${key}Status`] = procedure.status || 'pending';
+        row[`${key}CompletedDate`] = formatDate(procedure.completedDate);
+      });
+
+      return row;
+    });
+
+    const headers = [
+      { label: 'Employee Name', key: 'employeeName' },
+      { label: 'Employee ID', key: 'employeeId' },
+      { label: 'Employee Email', key: 'employeeEmail' },
+      { label: 'Department', key: 'department' },
+      { label: 'Position', key: 'position' },
+      { label: 'Management Level', key: 'managementLevel' },
+      { label: 'Status', key: 'status' },
+      { label: 'Resignation Date', key: 'resignationDate' },
+      { label: 'Last Working Date', key: 'lastWorkingDate' },
+      { label: 'Notice Period (days)', key: 'noticePeriodDays' },
+      { label: 'Reason', key: 'reason' },
+      { label: 'Approved By', key: 'approvedBy' },
+      { label: 'Approved By (Employee ID)', key: 'approvedByEmployeeId' },
+      { label: 'Approval Date', key: 'approvalDate' },
+      { label: 'Approval Remarks', key: 'approvalRemarks' },
+    ];
+
+    exitProcedureKeys.forEach((key) => {
+      const readableLabel = key
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, (char) => char.toUpperCase());
+      headers.push({ label: `${readableLabel} Status`, key: `${key}Status` });
+      headers.push({ label: `${readableLabel} Completed Date`, key: `${key}CompletedDate` });
+    });
+
+    const csvContent = buildCsvContent(headers, rows);
+
+    const nameParts = ['resignation-report'];
+    if (req.query.year) {
+      nameParts.push(`y${req.query.year}`);
+    }
+    if (req.query.month) {
+      nameParts.push(`m${req.query.month}`);
+    }
+    if (req.query.quarter) {
+      nameParts.push(`q${req.query.quarter}`);
+    }
+    const fileName = `${nameParts.join('-')}-${Date.now()}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+
+    return res.status(200).send(csvContent);
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({ success: false, message: error.message });
   }
 };

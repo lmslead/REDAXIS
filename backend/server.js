@@ -2,6 +2,8 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
 
 // Import routes
 import authRoutes from './routes/authRoutes.js';
@@ -20,6 +22,7 @@ import teamRoutes from './routes/teamRoutes.js';
 import assetsRoutes from './routes/assetsRoutes.js';
 import resignationRoutes from './routes/resignationRoutes.js';
 import employeeDocumentRoutes from './routes/employeeDocumentRoutes.js';
+import policyRoutes from './routes/policyRoutes.js';
 
 // Import utilities
 import { setupEscalationCron } from './utils/escalationService.js';
@@ -41,6 +44,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Static uploads directory for feed assets and other public files
+const uploadsDir = path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 // Database connection
 mongoose
@@ -70,6 +80,7 @@ app.use('/api/team', teamRoutes);
 app.use('/api/assets', assetsRoutes);
 app.use('/api/resignations', resignationRoutes);
 app.use('/api/employee-documents', employeeDocumentRoutes);
+app.use('/api/policies', policyRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

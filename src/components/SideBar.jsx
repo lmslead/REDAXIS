@@ -16,6 +16,7 @@ import {
   FaChevronUp,
   FaUserFriends,
   FaLaptop,
+  FaBook,
   FaTimes,
 } from "react-icons/fa";
 import { BiLogOut } from "react-icons/bi";
@@ -72,6 +73,7 @@ const SideBar = ({ isMobile = false, isOpen = true, onClose = () => {} }) => {
         { name: "Profile", icon: <FaUser />, path: "/profile" },
         { name: "Attendance", icon: <FaClipboardCheck />, path: "/attendance" },
         { name: "Leaves", icon: <FaUmbrellaBeach />, path: "/leaves" },
+        { name: "Policies", icon: <FaBook />, path: "/policies" },
       ]
     },
     { name: "Settings", icon: <FaCog />, path: "/settings" },

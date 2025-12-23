@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getUser } from '../services/api';
+import { isHumanResourcesUser } from '../utils/hrAccess';
 import './Resignation.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -63,6 +64,32 @@ const resignationAPI = {
       throw new Error(error.message || 'Failed to update exit procedure');
     }
     return response.json();
+  },
+
+  exportCsv: async (params = {}) => {
+    const token = getToken();
+    const query = new URLSearchParams(params).toString();
+    const response = await fetch(`${API_BASE_URL}/resignations/export${query ? `?${query}` : ''}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      let message = 'Failed to export exit data';
+      try {
+        const error = await response.json();
+        if (error?.message) {
+          message = error.message;
+        }
+      } catch (parseError) {
+        // Ignore parse errors and fall back to default message
+      }
+      throw new Error(message);
+    }
+
+    return response.blob();
   }
 };
 
@@ -77,9 +104,22 @@ const Resignation = () => {
     lastWorkingDate: '',
     reason: '',
   });
+  const today = new Date();
+  const [exportFilters, setExportFilters] = useState({
+    mode: 'month',
+    month: String(today.getMonth() + 1),
+    quarter: String(Math.floor(today.getMonth() / 3) + 1),
+    year: String(today.getFullYear()),
+    status: 'all',
+    startDate: '',
+    endDate: '',
+    dateField: 'lastWorkingDate',
+  });
+  const [exporting, setExporting] = useState(false);
 
   const currentUser = getUser();
   const canManage = currentUser?.managementLevel >= 3; // L3 and L4 can manage
+  const canExport = isHumanResourcesUser(currentUser);
   
   // Check if current user can manage a specific resignation
   const canManageResignation = (resignation) => {
@@ -163,6 +203,70 @@ const Resignation = () => {
       setSelectedResignation(null);
     } catch (error) {
       alert(error.message || 'Failed to update exit procedure');
+    }
+  };
+
+  const handleExportFilterChange = (field, value) => {
+    setExportFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const buildExportParams = () => {
+    const params = {};
+    const { mode, month, quarter, year, startDate, endDate, status, dateField } = exportFilters;
+
+    if (dateField) {
+      params.dateField = dateField;
+    }
+
+    if (mode === 'month') {
+      if (!month || !year) {
+        throw new Error('Please select both month and year for the export');
+      }
+      params.month = month;
+      params.year = year;
+    } else if (mode === 'quarter') {
+      if (!quarter || !year) {
+        throw new Error('Please select both quarter and year for the export');
+      }
+      params.quarter = quarter;
+      params.year = year;
+    } else if (mode === 'year') {
+      if (!year) {
+        throw new Error('Please provide the year to export');
+      }
+      params.year = year;
+    } else if (mode === 'custom') {
+      if (!startDate && !endDate) {
+        throw new Error('Please provide at least a start or end date');
+      }
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+    }
+
+    if (status && status !== 'all') {
+      params.status = status;
+    }
+
+    return params;
+  };
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const params = buildExportParams();
+      const blob = await resignationAPI.exportCsv(params);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `resignations-${Date.now()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      alert(error.message || 'Failed to export exit data');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -296,6 +400,148 @@ const Resignation = () => {
           </div>
         </div>
       </div>
+
+        {canExport && (
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-body">
+              <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3">
+                <div>
+                  <h5 className="mb-1">HR Bulk Export</h5>
+                  <p className="text-muted mb-0 small">Download exit and resignation data using month, quarter, year, or custom filters.</p>
+                </div>
+                <button
+                  className="btn btn-outline-primary"
+                  onClick={handleExport}
+                  disabled={exporting}
+                >
+                  {exporting ? (
+                    <span>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Preparing CSV...
+                    </span>
+                  ) : (
+                    <span>
+                      <i className="bi bi-download me-2"></i>Export CSV
+                    </span>
+                  )}
+                </button>
+              </div>
+              <div className="row g-3">
+                <div className="col-sm-6 col-md-3">
+                  <label className="form-label small fw-semibold">Filter Type</label>
+                  <select
+                    className="form-select"
+                    value={exportFilters.mode}
+                    onChange={(e) => handleExportFilterChange('mode', e.target.value)}
+                  >
+                    <option value="month">Month</option>
+                    <option value="quarter">Quarter</option>
+                    <option value="year">Year</option>
+                    <option value="custom">Custom Range</option>
+                  </select>
+                </div>
+
+                {(exportFilters.mode === 'month' || exportFilters.mode === 'quarter' || exportFilters.mode === 'year') && (
+                  <div className="col-sm-6 col-md-2">
+                    <label className="form-label small fw-semibold">Year</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      min="2000"
+                      max="3000"
+                      value={exportFilters.year}
+                      onChange={(e) => handleExportFilterChange('year', e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {exportFilters.mode === 'month' && (
+                  <div className="col-sm-6 col-md-2">
+                    <label className="form-label small fw-semibold">Month</label>
+                    <select
+                      className="form-select"
+                      value={exportFilters.month}
+                      onChange={(e) => handleExportFilterChange('month', e.target.value)}
+                    >
+                      {Array.from({ length: 12 }).map((_, index) => (
+                        <option key={index + 1} value={String(index + 1)}>
+                          {new Date(0, index).toLocaleString('default', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {exportFilters.mode === 'quarter' && (
+                  <div className="col-sm-6 col-md-2">
+                    <label className="form-label small fw-semibold">Quarter</label>
+                    <select
+                      className="form-select"
+                      value={exportFilters.quarter}
+                      onChange={(e) => handleExportFilterChange('quarter', e.target.value)}
+                    >
+                      {[1, 2, 3, 4].map((quarter) => (
+                        <option key={quarter} value={String(quarter)}>
+                          Q{quarter}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {exportFilters.mode === 'custom' && (
+                  <>
+                    <div className="col-sm-6 col-md-3">
+                      <label className="form-label small fw-semibold">Start Date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={exportFilters.startDate}
+                        onChange={(e) => handleExportFilterChange('startDate', e.target.value)}
+                      />
+                    </div>
+                    <div className="col-sm-6 col-md-3">
+                      <label className="form-label small fw-semibold">End Date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={exportFilters.endDate}
+                        onChange={(e) => handleExportFilterChange('endDate', e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="col-sm-6 col-md-3">
+                  <label className="form-label small fw-semibold">Status</label>
+                  <select
+                    className="form-select"
+                    value={exportFilters.status}
+                    onChange={(e) => handleExportFilterChange('status', e.target.value)}
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+
+                <div className="col-sm-6 col-md-3">
+                  <label className="form-label small fw-semibold">Date Field</label>
+                  <select
+                    className="form-select"
+                    value={exportFilters.dateField}
+                    onChange={(e) => handleExportFilterChange('dateField', e.target.value)}
+                  >
+                    <option value="lastWorkingDate">Last Working Date</option>
+                    <option value="resignationDate">Resignation Date</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Exit Requests */}
       <div className="card border-0 shadow-sm">

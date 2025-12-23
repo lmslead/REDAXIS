@@ -1,5 +1,36 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { POLICY_VERSION } from '../constants/policies.js';
+
+const policyRecordSchema = new mongoose.Schema(
+  {
+    acknowledged: {
+      type: Boolean,
+      default: false,
+    },
+    acknowledgedAt: Date,
+    version: {
+      type: String,
+      default: POLICY_VERSION,
+    },
+  },
+  { _id: false }
+);
+
+const policyAcknowledgementSchema = new mongoose.Schema(
+  {
+    transportPolicy: {
+      type: policyRecordSchema,
+      default: () => ({}),
+    },
+    attendanceLeavePolicy: {
+      type: policyRecordSchema,
+      default: () => ({}),
+    },
+    lastUpdatedAt: Date,
+  },
+  { _id: false }
+);
 
 const userSchema = new mongoose.Schema({
   employeeId: {
@@ -175,6 +206,10 @@ const userSchema = new mongoose.Schema({
       ref: 'User',
     },
   }],
+  policyAcknowledgements: {
+    type: policyAcknowledgementSchema,
+    default: () => ({}),
+  },
 }, {
   timestamps: true,
 });

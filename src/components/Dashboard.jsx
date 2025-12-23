@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dashboardAPI, attendanceAPI } from '../services/api';
+import { dashboardAPI, attendanceAPI, feedAPI } from '../services/api';
 import { getUser } from '../services/api';
 
 const Dashboard = () => {
@@ -8,12 +8,15 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [checkedIn, setCheckedIn] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState(null);
+  const [recentPosts, setRecentPosts] = useState([]);
+  const [feedLoading, setFeedLoading] = useState(true);
   const user = getUser();
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchDashboardData();
     checkTodayStatus();
+    fetchFeedPreview();
   }, []);
 
   const fetchDashboardData = async () => {
@@ -24,6 +27,18 @@ const Dashboard = () => {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFeedPreview = async () => {
+    try {
+      const response = await feedAPI.getAll({ limit: 3 });
+      setRecentPosts(response.data || []);
+    } catch (error) {
+      console.error('Error fetching feed preview:', error);
+      setRecentPosts([]);
+    } finally {
+      setFeedLoading(false);
     }
   };
 
@@ -231,9 +246,9 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="row g-4">
-        <div className="col-md-6">
-          <div className="card border-0 shadow-sm">
+      <div className="row g-4 align-items-stretch">
+        <div className="col-xl-5 col-lg-6">
+          <div className="card border-0 shadow-sm h-100">
             <div className="card-body">
               <h5 className="card-title fw-bold mb-3">Quick Actions</h5>
               <div className="d-grid gap-2">
@@ -260,7 +275,62 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="col-md-6">
+        <div className="col-xl-7 col-lg-6">
+          <div className="card border-0 shadow-sm h-100 feed-preview-card">
+            <div className="card-body d-flex flex-column">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h5 className="card-title fw-bold mb-0">Company Feed</h5>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-link text-decoration-none"
+                  onClick={() => navigate('/feed')}
+                >
+                  View all
+                  <i className="bi bi-arrow-up-right ms-1"></i>
+                </button>
+              </div>
+              {feedLoading ? (
+                <div className="text-muted small">Loading latest messages...</div>
+              ) : recentPosts.length === 0 ? (
+                <div className="text-muted small">No updates yet. Head to the feed to make the first announcement.</div>
+              ) : (
+                <div className="feed-preview-list d-flex flex-column gap-2">
+                  {recentPosts.map((post) => {
+                    const hasImage = Boolean(post.heroImage || (post.attachments && post.attachments.length));
+                    return (
+                      <button
+                        type="button"
+                        key={post._id}
+                        className="feed-preview-item text-start"
+                        onClick={() => navigate('/feed')}
+                      >
+                        <span
+                          className="feed-preview-indicator"
+                          style={{ backgroundColor: post.accentColor || '#2563eb' }}
+                        ></span>
+                        <div className="flex-grow-1">
+                          <div className="feed-preview-title">
+                            {post.title || post.content || 'Company update'}
+                          </div>
+                          <small className="text-muted">
+                            {(post.author?.firstName && `${post.author.firstName} ${post.author.lastName || ''}`.trim()) || 'HR Team'}
+                            {' • '}
+                            {new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </small>
+                        </div>
+                        {hasImage && <i className="bi bi-image text-muted"></i>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="row g-4 mt-1">
+        <div className="col-12">
           <div className="card border-0 shadow-sm">
             <div className="card-body">
               <h5 className="card-title fw-bold mb-3">System Status</h5>

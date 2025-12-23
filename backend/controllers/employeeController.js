@@ -2,6 +2,123 @@ import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import Department from '../models/Department.js';
 
+const VALID_JOINING_DATE_FIELDS = ['joiningDate'];
+
+const parseInteger = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const buildDateRange = (query) => {
+  const month = parseInteger(query.month);
+  const quarter = parseInteger(query.quarter);
+  const year = parseInteger(query.year);
+  const hasCustomDates = Boolean(query.startDate || query.endDate);
+
+  const throwValidationError = (message) => {
+    const error = new Error(message);
+    error.statusCode = 400;
+    throw error;
+  };
+
+  if (month !== null) {
+    if (month < 1 || month > 12) {
+      throwValidationError('Month must be between 1 and 12');
+    }
+    const targetYear = year ?? new Date().getFullYear();
+    if (targetYear < 1970 || targetYear > 3000) {
+      throwValidationError('Year is out of supported range');
+    }
+    const start = new Date(Date.UTC(targetYear, month - 1, 1));
+    const end = new Date(Date.UTC(targetYear, month, 0, 23, 59, 59, 999));
+    return { start, end };
+  }
+
+  if (quarter !== null) {
+    if (quarter < 1 || quarter > 4) {
+      throwValidationError('Quarter must be between 1 and 4');
+    }
+    const targetYear = year ?? new Date().getFullYear();
+    if (targetYear < 1970 || targetYear > 3000) {
+      throwValidationError('Year is out of supported range');
+    }
+    const startMonth = (quarter - 1) * 3;
+    const start = new Date(Date.UTC(targetYear, startMonth, 1));
+    const end = new Date(Date.UTC(targetYear, startMonth + 3, 0, 23, 59, 59, 999));
+    return { start, end };
+  }
+
+  if (year !== null) {
+    if (year < 1970 || year > 3000) {
+      throwValidationError('Year is out of supported range');
+    }
+    const start = new Date(Date.UTC(year, 0, 1));
+    const end = new Date(Date.UTC(year + 1, 0, 0, 23, 59, 59, 999));
+    return { start, end };
+  }
+
+  if (hasCustomDates) {
+    let start;
+    let end;
+
+    if (query.startDate) {
+      start = new Date(query.startDate);
+      if (Number.isNaN(start.getTime())) {
+        throwValidationError('Invalid startDate parameter');
+      }
+    }
+
+    if (query.endDate) {
+      end = new Date(query.endDate);
+      if (Number.isNaN(end.getTime())) {
+        throwValidationError('Invalid endDate parameter');
+      }
+      end.setHours(23, 59, 59, 999);
+    }
+
+    if (start && end && start > end) {
+      throwValidationError('startDate cannot be greater than endDate');
+    }
+
+    return { start, end };
+  }
+
+  return null;
+};
+
+const formatDate = (date) => {
+  if (!date) {
+    return '';
+  }
+  const parsed = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+  return parsed.toISOString().split('T')[0];
+};
+
+const escapeCsvValue = (value) => {
+  if (value === null || value === undefined) {
+    return '""';
+  }
+  const stringValue = String(value ?? '');
+  if (!stringValue.length) {
+    return '""';
+  }
+  return `"${stringValue.replace(/"/g, '""')}"`;
+};
+
+const buildCsvContent = (headers, rows) => {
+  const headerRow = headers.map(({ label }) => escapeCsvValue(label)).join(',');
+  const dataRows = rows.map((row) =>
+    headers.map(({ key }) => escapeCsvValue(row[key] ?? '')).join(',')
+  );
+  return [headerRow, ...dataRows].join('\n');
+};
+
 // Helper function to check if user can view/edit sensitive data
 // Only Finance Department users at L3 or L4 level can access sensitive data
 const checkCanViewSensitiveData = async (user) => {
@@ -531,5 +648,163 @@ export const updateEmployeeStatus = async (req, res) => {
   } catch (error) {
     console.error('❌ Update employee status error:', error);
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Export employee joining data as CSV with filters
+// @route   GET /api/employees/export/joinings
+// @access  Private (Human Resources department only)
+export const exportEmployeeJoinings = async (req, res) => {
+  try {
+    const {
+      status,
+      role,
+      departmentId,
+      departmentName,
+      dateField: requestedDateField,
+    } = req.query;
+
+    const dateField = VALID_JOINING_DATE_FIELDS.includes(requestedDateField)
+      ? requestedDateField
+      : 'joiningDate';
+
+    const query = {};
+
+    if (departmentId) {
+      query.department = departmentId;
+    }
+
+    const dateRange = buildDateRange(req.query);
+    if (dateRange) {
+      query[dateField] = {};
+      if (dateRange.start) {
+        query[dateField].$gte = dateRange.start;
+      }
+      if (dateRange.end) {
+        query[dateField].$lte = dateRange.end;
+      }
+      if (!Object.keys(query[dateField]).length) {
+        delete query[dateField];
+      }
+    }
+
+    if (status) {
+      const allowedStatuses = ['active', 'inactive', 'on-leave'];
+      const statusFilters = status
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter((item) => allowedStatuses.includes(item));
+
+      if (!statusFilters.length) {
+        const error = new Error('Invalid status filter provided');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      query.status = statusFilters.length === 1 ? statusFilters[0] : { $in: statusFilters };
+    }
+
+    if (role) {
+      const allowedRoles = ['admin', 'hr', 'employee'];
+      const roleFilters = role
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter((item) => allowedRoles.includes(item));
+
+      if (!roleFilters.length) {
+        const error = new Error('Invalid role filter provided');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      query.role = roleFilters.length === 1 ? roleFilters[0] : { $in: roleFilters };
+    }
+
+    const employees = await User.find(query)
+      .select('-password')
+      .populate('department', 'name code')
+      .populate('reportingManager', 'firstName lastName employeeId')
+      .sort({ [dateField]: -1 })
+      .lean();
+
+    const normalizedDepartmentName = departmentName?.trim().toLowerCase();
+    const filteredEmployees = normalizedDepartmentName
+      ? employees.filter((employee) => (employee.department?.name || '').trim().toLowerCase() === normalizedDepartmentName)
+      : employees;
+
+    const rows = filteredEmployees.map((employee) => {
+      const reportingManager = employee.reportingManager || {};
+      const department = employee.department || {};
+      const currentAddress = employee.currentAddress || {};
+      const name = `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
+
+      return {
+        employeeName: name,
+        employeeId: employee.employeeId || '',
+        workEmail: employee.email || '',
+        personalEmail: employee.personalEmail || '',
+        phone: employee.phone || '',
+        department: department.name || '',
+        position: employee.position || '',
+        managementLevel: typeof employee.managementLevel === 'number' ? `L${employee.managementLevel}` : '',
+        role: employee.role || '',
+        status: employee.status || '',
+        joiningDate: formatDate(employee.joiningDate),
+        dateOfBirth: formatDate(employee.dateOfBirth),
+        reportingManager: `${reportingManager.firstName || ''} ${reportingManager.lastName || ''}`.trim(),
+        reportingManagerId: reportingManager.employeeId || '',
+        saturdayWorking: employee.saturdayWorking ? 'Yes' : 'No',
+        canApproveLeaves: employee.canApproveLeaves ? 'Yes' : 'No',
+        canManageAttendance: employee.canManageAttendance ? 'Yes' : 'No',
+        city: currentAddress.city || '',
+        state: currentAddress.state || '',
+        country: currentAddress.country || '',
+      };
+    });
+
+    const headers = [
+      { label: 'Employee Name', key: 'employeeName' },
+      { label: 'Employee ID', key: 'employeeId' },
+      { label: 'Work Email', key: 'workEmail' },
+      { label: 'Personal Email', key: 'personalEmail' },
+      { label: 'Phone', key: 'phone' },
+      { label: 'Department', key: 'department' },
+      { label: 'Position', key: 'position' },
+      { label: 'Management Level', key: 'managementLevel' },
+      { label: 'Role', key: 'role' },
+      { label: 'Employment Status', key: 'status' },
+      { label: 'Joining Date', key: 'joiningDate' },
+      { label: 'Date of Birth', key: 'dateOfBirth' },
+      { label: 'Reporting Manager', key: 'reportingManager' },
+      { label: 'Reporting Manager ID', key: 'reportingManagerId' },
+      { label: 'Saturday Working', key: 'saturdayWorking' },
+      { label: 'Can Approve Leaves', key: 'canApproveLeaves' },
+      { label: 'Can Manage Attendance', key: 'canManageAttendance' },
+      { label: 'City', key: 'city' },
+      { label: 'State', key: 'state' },
+      { label: 'Country', key: 'country' },
+    ];
+
+    const csvContent = buildCsvContent(headers, rows);
+
+    const nameParts = ['employee-joinings'];
+    if (req.query.year) {
+      nameParts.push(`y${req.query.year}`);
+    }
+    if (req.query.month) {
+      nameParts.push(`m${req.query.month}`);
+    }
+    if (req.query.quarter) {
+      nameParts.push(`q${req.query.quarter}`);
+    }
+    const fileName = `${nameParts.join('-')}-${Date.now()}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+
+    return res.status(200).send(csvContent);
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({ success: false, message: error.message });
   }
 };
