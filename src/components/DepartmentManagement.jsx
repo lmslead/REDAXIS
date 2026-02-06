@@ -76,7 +76,11 @@ const DepartmentManagement = () => {
   });
 
   const currentUser = getUser();
-  const canManage = currentUser?.managementLevel >= 3; // Only L3 (Admin) can manage departments
+  const hrDepartmentNames = ['human resources', 'human resource', 'hr', 'people operations'];
+  const currentDepartmentName = (currentUser?.department?.name || currentUser?.departmentName || '')
+    .trim()
+    .toLowerCase();
+  const canManage = hrDepartmentNames.includes(currentDepartmentName);
 
   const departmentMap = useMemo(() => {
     const map = new Map();
