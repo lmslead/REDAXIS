@@ -218,21 +218,9 @@ export const createLeave = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid leave duration' });
     }
 
-    const balanceType = getLeaveBalanceType(req.body.leaveType);
-    if (balanceType) {
-      const userBalance = await ensureMonthlyLeaveBalance(req.user.id);
-      if (!userBalance) {
-        return res.status(404).json({ success: false, message: 'Employee not found' });
-      }
-      const currentBalance = userBalance.leaveBalance?.[balanceType] ?? 0;
-      if (currentBalance < requestedDays) {
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient ${balanceType} leave balance`,
-        });
-      }
-    }
-
+    // Balance check removed - employees can apply for leave regardless of balance
+    // Balance will be deducted (can go negative) upon approval
+    
     req.body.employee = req.user.id;
     req.body.days = requestedDays;
     const leave = await Leave.create(req.body);
