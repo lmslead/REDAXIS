@@ -144,6 +144,30 @@ export const authAPI = {
     });
     return data;
   },
+
+  uploadProfileImage: async (file) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('profileImage', file);
+
+    const response = await fetch(`${API_BASE_URL}/auth/profile-image`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to upload profile image');
+    }
+    if (data.data) {
+      setUser(data.data);
+      emitAuthChange();
+    }
+    return data;
+  },
 };
 
 // Events API
@@ -186,6 +210,10 @@ export const employeesAPI = {
     method: 'PATCH',
     body: JSON.stringify(statusData),
   }),
+  updateExitDate: (id, exitDateData) => apiRequest(`/employees/${id}/exit-date`, {
+    method: 'PATCH',
+    body: JSON.stringify(exitDateData),
+  }),
   exportJoinings: async (params = {}) => {
     const token = getToken();
     const queryString = new URLSearchParams(params).toString();
@@ -201,8 +229,29 @@ export const employeesAPI = {
         if (error?.message) {
           message = error.message;
         }
-      } catch (parseError) {
+      } catch {
         // Ignore JSON parse errors and fall back to default message
+      }
+      throw new Error(message);
+    }
+
+    return response.blob();
+  },
+  exportList: async (params = {}) => {
+    const token = getToken();
+    const queryString = new URLSearchParams(params).toString();
+    const response = await fetch(`${API_BASE_URL}/employees/export/list${queryString ? `?${queryString}` : ''}`, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+
+    if (!response.ok) {
+      let message = 'Failed to export employee list';
+      try {
+        const error = await response.json();
+        message = error.message || message;
+      } catch {
+        message = response.statusText || message;
       }
       throw new Error(message);
     }
@@ -241,6 +290,25 @@ export const recognitionAPI = {
     body: JSON.stringify(recognitionData),
   }),
   like: (id) => apiRequest(`/recognition/${id}/like`, { method: 'POST' }),
+};
+
+// Polls API
+export const pollsAPI = {
+  getAll: () => apiRequest('/polls'),
+  getById: (id) => apiRequest(`/polls/${id}`),
+  create: (pollData) => apiRequest('/polls', {
+    method: 'POST',
+    body: JSON.stringify(pollData),
+  }),
+  update: (id, pollData) => apiRequest(`/polls/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(pollData),
+  }),
+  delete: (id) => apiRequest(`/polls/${id}`, { method: 'DELETE' }),
+  vote: (id, payload) => apiRequest(`/polls/${id}/vote`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
 };
 
 // Chat API
@@ -504,6 +572,7 @@ export default {
   dashboard: dashboardAPI,
   feed: feedAPI,
   recognition: recognitionAPI,
+  polls: pollsAPI,
   chat: chatAPI,
   attendance: attendanceAPI,
   leave: leaveAPI,

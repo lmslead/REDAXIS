@@ -2,16 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardAPI, attendanceAPI, feedAPI } from '../services/api';
 import { getUser } from '../services/api';
+import './Dashboard.css';
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [checkedIn, setCheckedIn] = useState(false);
-  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [_todayAttendance, setTodayAttendance] = useState(null);
   const [recentPosts, setRecentPosts] = useState([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const user = getUser();
   const navigate = useNavigate();
+
+  const isDev = Boolean(import.meta?.env?.DEV);
 
   useEffect(() => {
     fetchDashboardData();
@@ -45,13 +48,18 @@ const Dashboard = () => {
   const checkTodayStatus = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      
-      console.log('=== CHECK TODAY STATUS START ===');
-      console.log('Today date:', today);
-      console.log('Current user object:', user);
-      
+
+      if (isDev) {
+        console.log('=== CHECK TODAY STATUS START ===');
+        console.log('Today date:', today);
+        console.log('Current user object:', user);
+      }
+
       const userId = user._id || user.id;
-      console.log('User ID to match:', userId);
+
+      if (isDev) {
+        console.log('User ID to match:', userId);
+      }
       
       // Pass employeeId to only get current user's attendance
       const response = await attendanceAPI.getAll({
@@ -59,34 +67,43 @@ const Dashboard = () => {
         endDate: today,
         employeeId: userId  // Add employeeId filter
       });
-      
-      console.log('API Response:', response);
-      console.log('Filtered attendance records:', response.data);
-      console.log('Number of records:', response.data?.length);
+
+      if (isDev) {
+        console.log('API Response:', response);
+        console.log('Filtered attendance records:', response.data);
+        console.log('Number of records:', response.data?.length);
+      }
       
       // Since we filtered by employeeId, there should be 0 or 1 record
       const myRecord = response.data && response.data.length > 0 ? response.data[0] : null;
-      
-      console.log('\n=== FINAL RESULT ===');
-      console.log('My Record:', myRecord);
-      console.log('Found Record:', !!myRecord);
-      console.log('Has CheckOut:', myRecord?.checkOut);
-      console.log('Will show Check Out button:', myRecord ? !myRecord.checkOut : false);
-      console.log('=== CHECK TODAY STATUS END ===\n');
+
+      if (isDev) {
+        console.log('\n=== FINAL RESULT ===');
+        console.log('My Record:', myRecord);
+        console.log('Found Record:', !!myRecord);
+        console.log('Has CheckOut:', myRecord?.checkOut);
+        console.log('Will show Check Out button:', myRecord ? !myRecord.checkOut : false);
+        console.log('=== CHECK TODAY STATUS END ===\n');
+      }
       
       if (myRecord && myRecord.checkIn) {
         // Record exists AND has check-in time
         setTodayAttendance(myRecord);
         const shouldShowCheckOut = !myRecord.checkOut;
-        console.log('✅ Setting checkedIn to:', shouldShowCheckOut);
+
+        if (isDev) {
+          console.log('✅ Setting checkedIn to:', shouldShowCheckOut);
+        }
         setCheckedIn(shouldShowCheckOut);
       } else {
-        console.log('❌ No check-in record found for today - setting checkedIn to false');
+        if (isDev) {
+          console.log('❌ No check-in record found for today - setting checkedIn to false');
+        }
         setTodayAttendance(null);
         setCheckedIn(false);
       }
     } catch (error) {
-      console.error('❌ Error checking today status:', error);
+      console.error('Error checking today status:', error);
       setTodayAttendance(null);
       setCheckedIn(false);
     }
@@ -161,13 +178,14 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="container py-4">
-      <div className="row mb-4">
-        <div className="col">
-          <h2 className="fw-bold">Welcome back, {user?.firstName}!</h2>
-          <p className="text-muted">Here's what's happening today</p>
-        </div>
-        <div className="col-auto">
+    <div className="container dashboard-page">
+      <div className="dashboard-header mb-4">
+        <div className="row align-items-center g-3">
+          <div className="col">
+            <h2 className="fw-bold dashboard-title mb-1">Welcome back, {user?.firstName}!</h2>
+            <p className="text-muted dashboard-subtitle">Here's what's happening today</p>
+          </div>
+          <div className="col-auto dashboard-actions">
           {!checkedIn ? (
             <button className="btn btn-success" onClick={handleCheckIn}>
               <i className="bi bi-clock-fill me-2"></i>Check In
@@ -177,19 +195,20 @@ const Dashboard = () => {
               <i className="bi bi-clock-fill me-2"></i>Check Out
             </button>
           )}
+          </div>
         </div>
       </div>
 
-      <div className="row g-4 mb-4">
+      <div className="row g-3 g-lg-4 mb-4">
         <div className="col-md-3">
-          <div className="card border-0 shadow-sm h-100">
+          <div className="card shadow-sm h-100 metric-card">
             <div className="card-body">
               <div className="d-flex align-items-center">
                 <div className="flex-grow-1">
-                  <h6 className="text-muted mb-2">Total Employees</h6>
-                  <h3 className="fw-bold mb-0">{stats?.totalEmployees || 0}</h3>
+                  <div className="text-muted metric-label mb-2">Total Employees</div>
+                  <h3 className="fw-bold mb-0 metric-value">{stats?.totalEmployees || 0}</h3>
                 </div>
-                <div className="bg-primary bg-opacity-10 p-3 rounded">
+                <div className="bg-primary bg-opacity-10 metric-icon">
                   <i className="bi bi-people-fill text-primary fs-4"></i>
                 </div>
               </div>
@@ -198,14 +217,14 @@ const Dashboard = () => {
         </div>
 
         <div className="col-md-3">
-          <div className="card border-0 shadow-sm h-100">
+          <div className="card shadow-sm h-100 metric-card">
             <div className="card-body">
               <div className="d-flex align-items-center">
                 <div className="flex-grow-1">
-                  <h6 className="text-muted mb-2">Active Today</h6>
-                  <h3 className="fw-bold mb-0">{stats?.todayAttendance || 0}</h3>
+                  <div className="text-muted metric-label mb-2">Active Today</div>
+                  <h3 className="fw-bold mb-0 metric-value">{stats?.todayAttendance || 0}</h3>
                 </div>
-                <div className="bg-success bg-opacity-10 p-3 rounded">
+                <div className="bg-success bg-opacity-10 metric-icon">
                   <i className="bi bi-check-circle-fill text-success fs-4"></i>
                 </div>
               </div>
@@ -214,14 +233,14 @@ const Dashboard = () => {
         </div>
 
         <div className="col-md-3">
-          <div className="card border-0 shadow-sm h-100">
+          <div className="card shadow-sm h-100 metric-card">
             <div className="card-body">
               <div className="d-flex align-items-center">
                 <div className="flex-grow-1">
-                  <h6 className="text-muted mb-2">On Leave</h6>
-                  <h3 className="fw-bold mb-0">{stats?.onLeaveEmployees || 0}</h3>
+                  <div className="text-muted metric-label mb-2">On Leave</div>
+                  <h3 className="fw-bold mb-0 metric-value">{stats?.onLeaveEmployees || 0}</h3>
                 </div>
-                <div className="bg-warning bg-opacity-10 p-3 rounded">
+                <div className="bg-warning bg-opacity-10 metric-icon">
                   <i className="bi bi-calendar-x-fill text-warning fs-4"></i>
                 </div>
               </div>
@@ -230,15 +249,65 @@ const Dashboard = () => {
         </div>
 
         <div className="col-md-3">
-          <div className="card border-0 shadow-sm h-100">
+          <div className="card shadow-sm h-100 metric-card">
             <div className="card-body">
               <div className="d-flex align-items-center">
                 <div className="flex-grow-1">
-                  <h6 className="text-muted mb-2">Upcoming Events</h6>
-                  <h3 className="fw-bold mb-0">{stats?.upcomingEvents || 0}</h3>
+                  <div className="text-muted metric-label mb-2">Upcoming Events</div>
+                  <h3 className="fw-bold mb-0 metric-value">{stats?.upcomingEvents || 0}</h3>
                 </div>
-                <div className="bg-info bg-opacity-10 p-3 rounded">
+                <div className="bg-info bg-opacity-10 metric-icon">
                   <i className="bi bi-calendar-event-fill text-info fs-4"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="row g-3 g-lg-4 mb-4">
+        <div className="col-md-4">
+          <div className="card shadow-sm h-100 metric-card">
+            <div className="card-body">
+              <div className="d-flex align-items-center">
+                <div className="flex-grow-1">
+                  <div className="text-muted metric-label mb-2">Personal Leave</div>
+                  <h3 className="fw-bold mb-0 metric-value">{stats?.leaveBalance?.personal ?? 0}</h3>
+                </div>
+                <div className="bg-info bg-opacity-10 metric-icon">
+                  <i className="bi bi-person-check text-info fs-4"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-md-4">
+          <div className="card shadow-sm h-100 metric-card">
+            <div className="card-body">
+              <div className="d-flex align-items-center">
+                <div className="flex-grow-1">
+                  <div className="text-muted metric-label mb-2">Sick Leave</div>
+                  <h3 className="fw-bold mb-0 metric-value">{stats?.leaveBalance?.sick ?? 0}</h3>
+                </div>
+                <div className="bg-danger bg-opacity-10 metric-icon">
+                  <i className="bi bi-thermometer-half text-danger fs-4"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-md-4">
+          <div className="card shadow-sm h-100 metric-card">
+            <div className="card-body">
+              <div className="d-flex align-items-center">
+                <div className="flex-grow-1">
+                  <div className="text-muted metric-label mb-2">Casual Leave</div>
+                  <h3 className="fw-bold mb-0 metric-value">{stats?.leaveBalance?.casual ?? 0}</h3>
+                </div>
+                <div className="bg-primary bg-opacity-10 metric-icon">
+                  <i className="bi bi-sun text-primary fs-4"></i>
                 </div>
               </div>
             </div>
@@ -269,6 +338,12 @@ const Dashboard = () => {
                   onClick={() => navigate('/attendance')}
                 >
                   <i className="bi bi-clock-history me-2"></i>Attendance History
+                </button>
+                <button 
+                  className="btn btn-outline-primary text-start"
+                  onClick={() => navigate('/polls')}
+                >
+                  <i className="bi bi-bar-chart-fill me-2"></i>Vote in Polls
                 </button>
               </div>
             </div>
@@ -329,11 +404,11 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="row g-4 mt-1">
+      <div className="row g-3 g-lg-4 mt-1">
         <div className="col-12">
-          <div className="card border-0 shadow-sm">
+          <div className="card shadow-sm">
             <div className="card-body">
-              <h5 className="card-title fw-bold mb-3">System Status</h5>
+              <h5 className="card-title fw-bold mb-3 dashboard-section-title">System Status</h5>
               <div className="mb-3">
                 <div className="d-flex justify-content-between mb-2">
                   <span>Active Employees</span>
@@ -344,7 +419,7 @@ const Dashboard = () => {
                     className="progress-bar bg-success"
                     role="progressbar"
                     style={{
-                      width: `${((stats?.activeEmployees || 0) / (stats?.totalEmployees || 1)) * 100}%`,
+                      width: `${Math.min(100, ((stats?.activeEmployees || 0) / (stats?.totalEmployees || 1)) * 100)}%`,
                     }}
                   ></div>
                 </div>

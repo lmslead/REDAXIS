@@ -17,6 +17,7 @@ import {
   FaUserFriends,
   FaLaptop,
   FaBook,
+  FaChartBar,
   FaTimes,
 } from "react-icons/fa";
 import { BiLogOut } from "react-icons/bi";
@@ -29,10 +30,10 @@ import userImg from "../assets/client.jpg";
 import { authAPI, getUser } from "../services/api";
 import "../App.css";
 
-const SideBar = ({ isMobile = false, isOpen = true, onClose = () => {} }) => {
+const SideBar = ({ isMobile = false, isOpen = true, onClose = () => {}, user: propUser }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = getUser();
+  const user = propUser || getUser();
   const [openDropdown, setOpenDropdown] = useState(null);
 
   // Determine dropdown name based on management level
@@ -62,6 +63,7 @@ const SideBar = ({ isMobile = false, isOpen = true, onClose = () => {} }) => {
         { name: "Event", icon: <FaCalendarAlt />, path: "/event" },
         { name: "Feed", icon: <FaNewspaper />, path: "/feed" },
         { name: "Recognition", icon: <FaAward />, path: "/recognition" },
+        { name: "Polls", icon: <FaChartBar />, path: "/polls" },
       ]
     },
     { name: "Inbox", icon: <BiSolidInbox />, path: "/chat" },

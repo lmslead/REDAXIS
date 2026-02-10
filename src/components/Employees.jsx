@@ -49,6 +49,8 @@ const Employees = () => {
   const [editEmployee, setEditEmployee] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDept, setFilterDept] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterEmploymentType, setFilterEmploymentType] = useState('all');
   const [canViewSensitiveData, setCanViewSensitiveData] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewEmployee, setViewEmployee] = useState(null);
@@ -65,6 +67,7 @@ const Employees = () => {
   const [documentViewerLoading, setDocumentViewerLoading] = useState(false);
   const [documentViewerPages, setDocumentViewerPages] = useState([]);
   const [documentViewerError, setDocumentViewerError] = useState('');
+  const [exitDateDrafts, setExitDateDrafts] = useState({});
   const today = new Date();
   const [joiningExportFilters, setJoiningExportFilters] = useState({
     mode: 'month',
@@ -77,11 +80,22 @@ const Employees = () => {
     endDate: '',
   });
   const [exportingJoinings, setExportingJoinings] = useState(false);
+  const [exportingEmployeeList, setExportingEmployeeList] = useState(false);
   
   const currentUser = getUser();
+  const currentUserId = currentUser?._id || currentUser?.id;
+  const isL3User = currentUser?.managementLevel === 3;
+  const financeDepartmentNames = ['finance', 'finance department', 'finance & accounts', 'accounts', 'accounting'];
+  const currentDepartmentName = (currentUser?.department?.name || currentUser?.departmentName || '')
+    .trim()
+    .toLowerCase();
+  const isHRUser = isHumanResourcesUser(currentUser);
+  const isFinanceL3User = isL3User && financeDepartmentNames.includes(currentDepartmentName);
+  const canExportEmployeeList = currentUser?.managementLevel >= 4 || isFinanceL3User;
   const canManage = currentUser?.managementLevel >= 2; // L2, L3, and L4 can manage employees
   const canManageDocuments = currentUser?.managementLevel >= 3;
   const canExportJoinings = isHumanResourcesUser(currentUser);
+  const canEditExitDate = currentUser?.managementLevel >= 4 || (isL3User && (isFinanceL3User || isHRUser));
   const getDocumentTypeLabel = (docType) => documentTypes.find((type) => type.key === docType)?.label || 'Document';
   const resetDocumentViewer = () => {
     setDocumentViewerPages([]);
@@ -99,6 +113,13 @@ const Employees = () => {
       addressObj.country,
     ].filter(Boolean);
     return parts.length ? parts.join(', ') : 'N/A';
+  };
+
+  const formatDateInput = (value) => {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().split('T')[0];
   };
 
   const [formData, setFormData] = useState({
@@ -120,6 +141,7 @@ const Employees = () => {
     saturdayWorking: false,
     dateOfBirth: '',
     joiningDate: new Date().toISOString().split('T')[0],
+    employmentType: 'full-time',
     assetsAllocated: '',
     salary: {
       grossSalary: '',
@@ -148,6 +170,11 @@ const Employees = () => {
     try {
       const response = await employeesAPI.getAll();
       setEmployees(response.data);
+      const nextExitDates = {};
+      (response.data || []).forEach((employee) => {
+        nextExitDates[employee._id] = formatDateInput(employee.exitDate);
+      });
+      setExitDateDrafts(nextExitDates);
       // Store permission flag from backend
       if (response.canViewSensitiveData !== undefined) {
         setCanViewSensitiveData(response.canViewSensitiveData);
@@ -281,6 +308,40 @@ const Employees = () => {
       alert(error.message || 'Failed to export joining data');
     } finally {
       setExportingJoinings(false);
+    }
+  };
+
+  const buildEmployeeExportParams = () => {
+    const params = {};
+    if (searchTerm.trim()) {
+      params.search = searchTerm.trim();
+    }
+    if (filterDept) {
+      params.departmentId = filterDept;
+    }
+    if (isL3User && filterStatus && filterStatus !== 'all') {
+      params.status = filterStatus;
+    }
+    return params;
+  };
+
+  const handleEmployeeListExport = async () => {
+    try {
+      setExportingEmployeeList(true);
+      const params = buildEmployeeExportParams();
+      const blob = await employeesAPI.exportList(params);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `employees-export-${Date.now()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(error.message || 'Failed to export employee list');
+    } finally {
+      setExportingEmployeeList(false);
     }
   };
 
@@ -455,6 +516,7 @@ const Employees = () => {
       saturdayWorking: employee.saturdayWorking || false,
       dateOfBirth: employee.dateOfBirth ? new Date(employee.dateOfBirth).toISOString().split('T')[0] : '',
       joiningDate: employee.joiningDate ? new Date(employee.joiningDate).toISOString().split('T')[0] : '',
+      employmentType: employee.employmentType || 'full-time',
       // Only load sensitive data if user has permission
       salary: canViewSensitiveData ? (employee.salary || { grossSalary: '' }) : { grossSalary: '' },
       bankDetails: canViewSensitiveData ? (employee.bankDetails || { accountNumber: '', bankName: '', ifscCode: '' }) : { accountNumber: '', bankName: '', ifscCode: '' },
@@ -491,8 +553,14 @@ const Employees = () => {
   };
 
   const handleStatusChange = async (employeeId, status, reason) => {
-    const statusText = status === 'active' ? 'activate' : status === 'on-leave' ? 'suspend' : 'inactivate';
-    const confirmMessage = `Are you sure you want to ${statusText} this employee?${status === 'inactive' ? '\n\nNote: Inactive users cannot login to the system.' : ''}`;
+    const statusText = status === 'active'
+      ? 'activate'
+      : status === 'on-leave'
+      ? 'suspend'
+      : status === 'absconded'
+      ? 'mark as absconded'
+      : 'inactivate';
+    const confirmMessage = `Are you sure you want to ${statusText} this employee?${status === 'inactive' || status === 'absconded' ? '\n\nNote: This user cannot login to the system.' : ''}`;
     
     if (window.confirm(confirmMessage)) {
       try {
@@ -506,6 +574,36 @@ const Employees = () => {
       } catch (error) {
         alert(error.message || `Failed to ${statusText} employee`);
       }
+    }
+  };
+
+  const handleExitDateChange = (employeeId, value) => {
+    setExitDateDrafts((prev) => ({
+      ...prev,
+      [employeeId]: value,
+    }));
+  };
+
+  const handleExitDateSave = async (employee) => {
+    if (!canEditExitDate || !employee?._id) return;
+    if (employee._id === currentUserId) return;
+
+    const draft = exitDateDrafts[employee._id] || '';
+    const existing = formatDateInput(employee.exitDate);
+
+    if (draft === existing) return;
+
+    try {
+      await employeesAPI.updateExitDate(employee._id, {
+        exitDate: draft || null,
+      });
+      fetchEmployees();
+    } catch (error) {
+      alert(error.message || 'Failed to update exit date');
+      setExitDateDrafts((prev) => ({
+        ...prev,
+        [employee._id]: existing,
+      }));
     }
   };
 
@@ -544,7 +642,9 @@ const Employees = () => {
                          emp.personalEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          emp.employeeId?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = !filterDept || emp.department?._id === filterDept;
-    return matchesSearch && matchesDept;
+    const matchesStatus = !isL3User || filterStatus === 'all' || emp.status === filterStatus;
+    const matchesEmploymentType = filterEmploymentType === 'all' || emp.employmentType === filterEmploymentType;
+    return matchesSearch && matchesDept && matchesStatus && matchesEmploymentType;
   });
 
   if (loading) {
@@ -702,6 +802,7 @@ const Employees = () => {
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                   <option value="on-leave">On Leave</option>
+                  <option value="absconded">Absconded</option>
                 </select>
               </div>
 
@@ -727,7 +828,7 @@ const Employees = () => {
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-body">
           <div className="row g-3">
-            <div className="col-md-6">
+            <div className={isL3User ? 'col-md-5' : 'col-md-6'}>
               <input
                 type="text"
                 className="form-control"
@@ -736,7 +837,7 @@ const Employees = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="col-md-4">
+            <div className={isL3User ? 'col-md-3' : 'col-md-4'}>
               <select
                 className="form-select"
                 value={filterDept}
@@ -748,13 +849,56 @@ const Employees = () => {
                 ))}
               </select>
             </div>
+            {isL3User && (
+              <div className="col-md-2">
+                <select
+                  className="form-select"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="absconded">Absconded</option>
+                </select>
+              </div>
+            )}
             <div className="col-md-2">
-              <button
-                className="btn btn-outline-secondary w-100"
-                onClick={() => { setSearchTerm(''); setFilterDept(''); }}
+              <select
+                className="form-select"
+                value={filterEmploymentType}
+                onChange={(e) => setFilterEmploymentType(e.target.value)}
               >
-                Clear Filters
-              </button>
+                <option value="all">All Types</option>
+                <option value="full-time">Full Time</option>
+                <option value="probation">Probation</option>
+                <option value="internship">Internship</option>
+                <option value="contract">Contract</option>
+              </select>
+            </div>
+            <div className="col-md-2">
+              <div className="d-grid gap-2">
+                <button
+                  className="btn btn-outline-secondary w-100"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setFilterDept('');
+                    setFilterStatus('all');
+                    setFilterEmploymentType('all');
+                  }}
+                >
+                  Clear Filters
+                </button>
+                {canExportEmployeeList && (
+                  <button
+                    className="btn btn-outline-primary w-100"
+                    onClick={handleEmployeeListExport}
+                    disabled={exportingEmployeeList}
+                  >
+                    {exportingEmployeeList ? 'Preparing...' : 'Export Excel'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -763,19 +907,20 @@ const Employees = () => {
       {/* Employees Table */}
       <div className="card border-0 shadow-sm">
         <div className="card-body">
-          <div className="table-responsive employees-table-wrapper" style={{ overflow: 'visible' }}>
+          <div className="table-responsive employees-table-wrapper">
             <table className="table table-hover align-middle employees-table">
               <thead>
                 <tr>
-                  <th>Employee ID</th>
-                  <th>Name</th>
-                  <th>Work Email</th>
-                  <th>Department</th>
-                  <th>Position</th>
-                  <th>Level</th>
-                  <th>Reporting Manager</th>
-                  <th>Status</th>
-                  {canManage && <th>Actions</th>}
+                  <th style={{ width: '8%' }}>Employee ID</th>
+                  <th style={{ width: '12%' }}>Name</th>
+                  <th style={{ width: '10%' }}>Department</th>
+                  <th style={{ width: '9%' }}>Position</th>
+                  <th style={{ width: '5%' }}>Level</th>
+                  <th style={{ width: '8%' }}>Type</th>
+                  <th style={{ width: '11%' }}>Reporting Manager</th>
+                  <th style={{ width: '9%' }}>Exit Date</th>
+                  <th style={{ width: '7%' }}>Status</th>
+                  {canManage && <th style={{ width: '21%', textAlign: 'center' }}>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -786,50 +931,79 @@ const Employees = () => {
                     onClick={() => handleView(employee)}
                     title="Click to view details"
                   >
-                    <td className="fw-bold" data-label="Employee ID">{employee.employeeId}</td>
+                    <td className="fw-bold text-primary" data-label="Employee ID">{employee.employeeId}</td>
                     <td data-label="Name">
                       <div className="d-flex align-items-center">
                         <img
                           src={employee.profileImage || '/assets/client.jpg'}
                           alt={employee.firstName}
                           className="rounded-circle me-2"
-                          style={{ width: '32px', height: '32px', objectFit: 'cover' }}
+                          style={{ width: '36px', height: '36px', objectFit: 'cover', border: '2px solid #e2e8f0' }}
                         />
-                        <span>{employee.firstName} {employee.lastName}</span>
+                        <span className="fw-medium">{employee.firstName} {employee.lastName}</span>
                       </div>
                     </td>
-                    <td data-label="Work Email">{employee.email}</td>
-                    <td data-label="Department">{employee.department?.name || 'N/A'}</td>
-                    <td data-label="Position">{employee.position || 'N/A'}</td>
+                    <td data-label="Department">
+                      <span className="text-truncate d-block" style={{ maxWidth: '120px' }} title={employee.department?.name || 'N/A'}>
+                        {employee.department?.name || 'N/A'}
+                      </span>
+                    </td>
+                    <td data-label="Position">
+                      <span className="text-truncate d-block" style={{ maxWidth: '100px' }} title={employee.position || 'N/A'}>
+                        {employee.position || 'N/A'}
+                      </span>
+                    </td>
                     <td data-label="Level">
-                      <span className={`badge ${
+                      <span className={`badge rounded-pill ${
                         employee.managementLevel === 4 ? 'bg-dark' :
                         employee.managementLevel === 3 ? 'bg-danger' :
-                        employee.managementLevel === 2 ? 'bg-warning' :
-                        employee.managementLevel === 1 ? 'bg-info' : 'bg-primary'
-                      }`}>
-                        L{employee.managementLevel} - {
-                          employee.managementLevel === 4 ? 'CEO/OWNER' :
-                          employee.managementLevel === 3 ? 'ADMIN' :
-                          employee.managementLevel === 2 ? 'SR. MANAGER' :
-                          employee.managementLevel === 1 ? 'MANAGER' : 'EMPLOYEE'
-                        }
+                        employee.managementLevel === 2 ? 'bg-warning text-dark' :
+                        employee.managementLevel === 1 ? 'bg-info text-dark' : 'bg-primary'
+                      }`} style={{ fontSize: '0.7rem', padding: '0.35rem 0.6rem' }}>
+                        L{employee.managementLevel}
+                      </span>
+                    </td>
+                    <td data-label="Type">
+                      <span className={`badge rounded-pill ${
+                        employee.employmentType === 'full-time' ? 'bg-success' :
+                        employee.employmentType === 'probation' ? 'bg-warning text-dark' :
+                        employee.employmentType === 'internship' ? 'bg-info text-dark' : 'bg-secondary'
+                      }`} style={{ fontSize: '0.65rem', padding: '0.3rem 0.5rem', textTransform: 'capitalize' }}>
+                        {employee.employmentType?.replace('-', ' ') || 'Full Time'}
                       </span>
                     </td>
                     <td data-label="Reporting Manager">
                       {employee.reportingManager ? (
-                        <span className="text-muted small">
+                        <span className="text-truncate d-block text-muted" style={{ maxWidth: '100px', fontSize: '0.8rem' }} title={`${employee.reportingManager.firstName} ${employee.reportingManager.lastName}`}>
                           {employee.reportingManager.firstName} {employee.reportingManager.lastName}
                         </span>
                       ) : (
-                        <span className="text-muted small">-</span>
+                        <span className="text-muted">-</span>
+                      )}
+                    </td>
+                    <td data-label="Exit Date" onClick={(e) => e.stopPropagation()}>
+                      {canEditExitDate && employee._id !== currentUserId ? (
+                        <input
+                          type="date"
+                          className="form-control form-control-sm"
+                          style={{ fontSize: '0.75rem', padding: '0.25rem 0.4rem', minWidth: '110px' }}
+                          value={exitDateDrafts[employee._id] || ''}
+                          onChange={(e) => handleExitDateChange(employee._id, e.target.value)}
+                          onBlur={() => handleExitDateSave(employee)}
+                          max={new Date().toISOString().split('T')[0]}
+                        />
+                      ) : (
+                        <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+                          {employee.exitDate ? formatDateInput(employee.exitDate) : '-'}
+                        </span>
                       )}
                     </td>
                     <td data-label="Status">
-                      <span className={`badge ${
+                      <span className={`badge rounded-pill text-uppercase ${
                         employee.status === 'active' ? 'bg-success' :
-                        employee.status === 'on-leave' ? 'bg-warning' : 'bg-secondary'
-                      }`}>
+                        employee.status === 'on-leave' ? 'bg-warning text-dark' :
+                        employee.status === 'absconded' ? 'bg-danger' : 'bg-secondary'
+                      }`} style={{ fontSize: '0.65rem', padding: '0.35rem 0.55rem' }}>
                         {employee.status}
                       </span>
                     </td>
@@ -839,7 +1013,7 @@ const Employees = () => {
                         className="employee-actions"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="d-flex gap-1 employee-card-actions">
+                        <div className="d-flex gap-1 justify-content-center employee-card-actions">
                           {/* L2 can edit L0/L1 only, L3 can edit up to L2, L4 can edit anyone */}
                           {(currentUser?.managementLevel === 4 ||
                             currentUser?.managementLevel === 3 || 
@@ -932,6 +1106,24 @@ const Employees = () => {
                                     }}
                                   >
                                     <i className="bi bi-x-circle me-2 text-danger"></i>Inactivate
+                                  </a>
+                                </li>
+                                <li>
+                                  <a 
+                                    className="dropdown-item" 
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      if (employee.status !== 'absconded') {
+                                        handleStatusChange(employee._id, 'absconded', 'Marked absconded by admin');
+                                      }
+                                    }}
+                                    style={{ 
+                                      pointerEvents: employee.status === 'absconded' ? 'none' : 'auto',
+                                      opacity: employee.status === 'absconded' ? 0.5 : 1
+                                    }}
+                                  >
+                                    <i className="bi bi-exclamation-octagon me-2 text-danger"></i>Absconded
                                   </a>
                                 </li>
                               </ul>
@@ -1286,6 +1478,19 @@ const Employees = () => {
                         value={formData.joiningDate}
                         onChange={(e) => setFormData({...formData, joiningDate: e.target.value})}
                       />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">Employment Type</label>
+                      <select
+                        className="form-select form-select-sm"
+                        value={formData.employmentType}
+                        onChange={(e) => setFormData({...formData, employmentType: e.target.value})}
+                      >
+                        <option value="full-time">Full Time</option>
+                        <option value="probation">Probation</option>
+                        <option value="internship">Internship</option>
+                        <option value="contract">Contract</option>
+                      </select>
                     </div>
 
                     {/* Hierarchy & Permissions */}
@@ -1810,6 +2015,18 @@ const Employees = () => {
                               {viewEmployee.joiningDate 
                                 ? new Date(viewEmployee.joiningDate).toLocaleDateString()
                                 : 'N/A'}
+                            </p>
+                          </div>
+                          <div className="col-6">
+                            <label className="text-muted" style={{ fontSize: '0.75rem' }}>Employment Type</label>
+                            <p className="mb-2 small">
+                              <span className={`badge ${
+                                viewEmployee.employmentType === 'full-time' ? 'bg-success' :
+                                viewEmployee.employmentType === 'probation' ? 'bg-warning text-dark' :
+                                viewEmployee.employmentType === 'internship' ? 'bg-info text-dark' : 'bg-secondary'
+                              }`} style={{ fontSize: '0.7rem', textTransform: 'capitalize' }}>
+                                {viewEmployee.employmentType?.replace('-', ' ') || 'Full Time'}
+                              </span>
                             </p>
                           </div>
                           <div className="col-6">

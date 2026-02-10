@@ -1,0 +1,71 @@
+.dashboard-page {
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.dashboard-header {
+  background: linear-gradient(135deg, var(--bg-card), var(--accent-soft));
+  border: 1px solid var(--border-subtle);
+  border-radius: 22px;
+  padding: 1.25rem 1.25rem;
+}
+
+@media (min-width: 992px) {
+  .dashboard-page {
+    padding-top: 1.75rem;
+    padding-bottom: 1.75rem;
+  }
+
+  .dashboard-header {
+    padding: 1.5rem 1.75rem;
+  }
+}
+
+.dashboard-title {
+  letter-spacing: -0.02em;
+}
+
+.dashboard-subtitle {
+  margin-bottom: 0;
+}
+
+.metric-card .card-body {
+  padding: 1.25rem 1.25rem;
+}
+
+@media (min-width: 992px) {
+  .metric-card .card-body {
+    padding: 1.4rem 1.4rem;
+  }
+}
+
+.metric-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.metric-value {
+  letter-spacing: -0.03em;
+}
+
+.metric-icon {
+  width: 52px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+}
+
+.dashboard-actions .btn {
+  border-radius: 999px;
+  font-weight: 600;
+  padding-left: 1.1rem;
+  padding-right: 1.1rem;
+}
+
+.dashboard-section-title {
+  letter-spacing: -0.01em;
+}

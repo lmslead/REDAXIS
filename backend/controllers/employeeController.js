@@ -236,6 +236,7 @@ export const getEmployees = async (req, res) => {
       .select('-password')
       .populate('department')
       .populate('reportingManager', 'firstName lastName employeeId')
+      .populate('leaveBalanceMeta.lastAdjustedBy', 'firstName lastName employeeId')
       .sort({ createdAt: -1 });
 
     // Filter sensitive fields based on user permissions
@@ -530,6 +531,7 @@ export const getEmployeeStats = async (req, res) => {
     const active = await User.countDocuments({ status: 'active' });
     const inactive = await User.countDocuments({ status: 'inactive' });
     const onLeave = await User.countDocuments({ status: 'on-leave' });
+    const absconded = await User.countDocuments({ status: 'absconded' });
 
     const byDepartment = await User.aggregate([
       {
@@ -556,6 +558,7 @@ export const getEmployeeStats = async (req, res) => {
         active,
         inactive,
         onLeave,
+        absconded,
         byDepartment,
         byRole,
       },
@@ -583,10 +586,10 @@ export const updateEmployeeStatus = async (req, res) => {
     const { status, isActive, reason } = req.body;
 
     // Validate status
-    if (!['active', 'inactive', 'on-leave'].includes(status)) {
+    if (!['active', 'inactive', 'on-leave', 'absconded'].includes(status)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid status. Must be active, inactive, or on-leave',
+        message: 'Invalid status. Must be active, inactive, on-leave, or absconded',
       });
     }
 
@@ -622,8 +625,11 @@ export const updateEmployeeStatus = async (req, res) => {
     }
 
     // If inactivating, set isActive to false
-    if (status === 'inactive') {
+    if (status === 'inactive' || status === 'absconded') {
       employee.isActive = false;
+      if (status === 'absconded' && !employee.exitDate) {
+        employee.exitDate = new Date();
+      }
     }
     // If activating, set isActive to true
     else if (status === 'active') {
@@ -647,6 +653,59 @@ export const updateEmployeeStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Update employee status error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update employee exit date
+// @route   PATCH /api/employees/:id/exit-date
+// @access  Private (L3 HR/Finance and L4 only)
+export const updateEmployeeExitDate = async (req, res) => {
+  try {
+    const { exitDate } = req.body;
+
+    const employee = await User.findById(req.params.id);
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found',
+      });
+    }
+
+    // Prevent users from editing their own exit date
+    if (employee._id.toString() === req.user.id) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot change your own exit date',
+      });
+    }
+
+    const parsedExitDate = exitDate ? new Date(exitDate) : null;
+
+    if (parsedExitDate && Number.isNaN(parsedExitDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid exit date provided',
+      });
+    }
+
+    employee.exitDate = parsedExitDate;
+
+    await employee.save();
+
+    const updatedEmployee = await User.findById(employee._id)
+      .select('-password')
+      .populate('department')
+      .populate('reportingManager', 'firstName lastName employeeId');
+
+    res.status(200).json({
+      success: true,
+      message: 'Exit date updated successfully',
+      data: updatedEmployee,
+    });
+  } catch (error) {
+    console.error('❌ Update employee exit date error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -689,7 +748,7 @@ export const exportEmployeeJoinings = async (req, res) => {
     }
 
     if (status) {
-      const allowedStatuses = ['active', 'inactive', 'on-leave'];
+      const allowedStatuses = ['active', 'inactive', 'on-leave', 'absconded'];
       const statusFilters = status
         .split(',')
         .map((item) => item.trim().toLowerCase())
@@ -798,6 +857,160 @@ export const exportEmployeeJoinings = async (req, res) => {
       nameParts.push(`q${req.query.quarter}`);
     }
     const fileName = `${nameParts.join('-')}-${Date.now()}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+
+    return res.status(200).send(csvContent);
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Export employee list as CSV with filters
+// @route   GET /api/employees/export/list
+// @access  Private (Finance L3 and L4 only)
+export const exportEmployeeList = async (req, res) => {
+  try {
+    const { status, departmentId, search } = req.query;
+    const query = {};
+
+    if (departmentId) {
+      query.department = departmentId;
+    }
+
+    if (status && status !== 'all') {
+      const allowedStatuses = ['active', 'inactive', 'on-leave', 'absconded'];
+      const statusFilters = status
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter((item) => allowedStatuses.includes(item));
+
+      if (!statusFilters.length) {
+        const error = new Error('Invalid status filter provided');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      query.status = statusFilters.length === 1 ? statusFilters[0] : { $in: statusFilters };
+    }
+
+    if (search) {
+      query.$or = [
+        { firstName: { $regex: search, $options: 'i' } },
+        { lastName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { personalEmail: { $regex: search, $options: 'i' } },
+        { employeeId: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const employees = await User.find(query)
+      .select('-password')
+      .populate('department', 'name code')
+      .populate('reportingManager', 'firstName lastName employeeId')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const rows = employees.map((employee) => {
+      const reportingManager = employee.reportingManager || {};
+      const department = employee.department || {};
+      const currentAddress = employee.currentAddress || {};
+      const permanentAddress = employee.permanentAddress || {};
+      const salary = employee.salary || {};
+      const bankDetails = employee.bankDetails || {};
+      const complianceDetails = employee.complianceDetails || {};
+
+      return {
+        employeeId: employee.employeeId || '',
+        firstName: employee.firstName || '',
+        lastName: employee.lastName || '',
+        employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
+        workEmail: employee.email || '',
+        personalEmail: employee.personalEmail || '',
+        phone: employee.phone || '',
+        department: department.name || '',
+        departmentCode: department.code || '',
+        position: employee.position || '',
+        managementLevel: typeof employee.managementLevel === 'number' ? `L${employee.managementLevel}` : '',
+        role: employee.role || '',
+        status: employee.status || '',
+        joiningDate: formatDate(employee.joiningDate),
+        dateOfBirth: formatDate(employee.dateOfBirth),
+        reportingManager: `${reportingManager.firstName || ''} ${reportingManager.lastName || ''}`.trim(),
+        reportingManagerId: reportingManager.employeeId || '',
+        saturdayWorking: employee.saturdayWorking ? 'Yes' : 'No',
+        canApproveLeaves: employee.canApproveLeaves ? 'Yes' : 'No',
+        canManageAttendance: employee.canManageAttendance ? 'Yes' : 'No',
+        panCard: employee.panCard || '',
+        aadharCard: employee.aadharCard || '',
+        grossSalary: salary.grossSalary ?? '',
+        bankName: bankDetails.bankName || '',
+        accountNumber: bankDetails.accountNumber || '',
+        ifscCode: bankDetails.ifscCode || '',
+        uanNumber: complianceDetails.uanNumber || '',
+        pfNumber: complianceDetails.pfNumber || '',
+        esiNumber: complianceDetails.esiNumber || '',
+        currentStreet: currentAddress.street || '',
+        currentCity: currentAddress.city || '',
+        currentState: currentAddress.state || '',
+        currentZipCode: currentAddress.zipCode || '',
+        currentCountry: currentAddress.country || '',
+        permanentStreet: permanentAddress.street || '',
+        permanentCity: permanentAddress.city || '',
+        permanentState: permanentAddress.state || '',
+        permanentZipCode: permanentAddress.zipCode || '',
+        permanentCountry: permanentAddress.country || '',
+        createdAt: formatDate(employee.createdAt),
+      };
+    });
+
+    const headers = [
+      { label: 'Employee ID', key: 'employeeId' },
+      { label: 'First Name', key: 'firstName' },
+      { label: 'Last Name', key: 'lastName' },
+      { label: 'Employee Name', key: 'employeeName' },
+      { label: 'Work Email', key: 'workEmail' },
+      { label: 'Personal Email', key: 'personalEmail' },
+      { label: 'Phone', key: 'phone' },
+      { label: 'Department', key: 'department' },
+      { label: 'Department Code', key: 'departmentCode' },
+      { label: 'Position', key: 'position' },
+      { label: 'Management Level', key: 'managementLevel' },
+      { label: 'Role', key: 'role' },
+      { label: 'Employment Status', key: 'status' },
+      { label: 'Joining Date', key: 'joiningDate' },
+      { label: 'Date of Birth', key: 'dateOfBirth' },
+      { label: 'Reporting Manager', key: 'reportingManager' },
+      { label: 'Reporting Manager ID', key: 'reportingManagerId' },
+      { label: 'Saturday Working', key: 'saturdayWorking' },
+      { label: 'Can Approve Leaves', key: 'canApproveLeaves' },
+      { label: 'Can Manage Attendance', key: 'canManageAttendance' },
+      { label: 'PAN Card', key: 'panCard' },
+      { label: 'Aadhar Card', key: 'aadharCard' },
+      { label: 'Gross Salary', key: 'grossSalary' },
+      { label: 'Bank Name', key: 'bankName' },
+      { label: 'Account Number', key: 'accountNumber' },
+      { label: 'IFSC Code', key: 'ifscCode' },
+      { label: 'UAN Number', key: 'uanNumber' },
+      { label: 'PF Number', key: 'pfNumber' },
+      { label: 'ESI Number', key: 'esiNumber' },
+      { label: 'Current Street', key: 'currentStreet' },
+      { label: 'Current City', key: 'currentCity' },
+      { label: 'Current State', key: 'currentState' },
+      { label: 'Current Zip Code', key: 'currentZipCode' },
+      { label: 'Current Country', key: 'currentCountry' },
+      { label: 'Permanent Street', key: 'permanentStreet' },
+      { label: 'Permanent City', key: 'permanentCity' },
+      { label: 'Permanent State', key: 'permanentState' },
+      { label: 'Permanent Zip Code', key: 'permanentZipCode' },
+      { label: 'Permanent Country', key: 'permanentCountry' },
+      { label: 'Created Date', key: 'createdAt' },
+    ];
+
+    const csvContent = buildCsvContent(headers, rows);
+    const fileName = `employees-export-${Date.now()}.csv`;
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);

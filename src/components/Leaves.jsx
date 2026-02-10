@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getUser } from '../services/api';
+import { getUser, employeesAPI } from '../services/api';
 import './Leaves.css';
 
 // Import API from services
@@ -62,6 +62,22 @@ const leaveAPI = {
       throw new Error(error.message || 'Failed to delete leave');
     }
     return response.json();
+  },
+  updateBalance: async (employeeId, data) => {
+    const token = getToken();
+    const response = await fetch(`${API_BASE_URL}/leaves/balance/${employeeId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to update leave balance');
+    }
+    return response.json();
   }
 };
 
@@ -69,6 +85,17 @@ const Leaves = () => {
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [balanceEmployees, setBalanceEmployees] = useState([]);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceEmployeeSearch, setBalanceEmployeeSearch] = useState('');
+  const [balanceSaveMessage, setBalanceSaveMessage] = useState('');
+  const [balanceForm, setBalanceForm] = useState({
+    employeeId: '',
+    personal: '',
+    sick: '',
+    casual: ''
+  });
   const [filterStatus, setFilterStatus] = useState('all');
   const [stats, setStats] = useState({
     total: 0,
@@ -82,20 +109,35 @@ const Leaves = () => {
   
   // L1+ can manage leaves (L1, L2, L3)
   const canManage = currentUser?.managementLevel >= 1;
+  const financeDepartmentNames = ['finance', 'finance department', 'finance & accounts', 'accounts', 'accounting'];
+  const currentDepartmentName = (currentUser?.department?.name || currentUser?.departmentName || '')
+    .trim()
+    .toLowerCase();
+  const isFinanceL3User = currentUser?.managementLevel === 3 && financeDepartmentNames.includes(currentDepartmentName);
+  const canEditBalances = currentUser?.managementLevel >= 4 || isFinanceL3User;
   
   const [newLeave, setNewLeave] = useState({
     leaveType: 'casual',
+    leaveDuration: 'full',
     startDate: '',
     endDate: '',
     reason: ''
   });
 
-  const leaveTypes = [
+  const leaveTypeOptions = [
+    { value: 'personal', label: 'Personal Leave', icon: '🧘', color: 'info' },
     { value: 'casual', label: 'Casual Leave', icon: '🏖️', color: 'primary' },
     { value: 'sick', label: 'Sick Leave', icon: '🤒', color: 'danger' },
-    { value: 'half-day', label: 'Half Day Leave', icon: '⏰', color: 'warning' },
-    { value: 'privilege', label: 'Privilege Leave', icon: '✈️', color: 'success' },
     { value: 'unpaid', label: 'Unpaid Leave', icon: '📅', color: 'secondary' }
+  ];
+
+  const leaveTypeStyles = [
+    ...leaveTypeOptions,
+    { value: 'half-day', label: 'Half Day Leave', icon: '⏰', color: 'warning' },
+    { value: 'earned', label: 'Earned Leave', icon: '✈️', color: 'success' },
+    { value: 'privilege', label: 'Privilege Leave', icon: '✈️', color: 'success' },
+    { value: 'maternity', label: 'Maternity Leave', icon: '🤰', color: 'success' },
+    { value: 'paternity', label: 'Paternity Leave', icon: '👶', color: 'success' }
   ];
 
   useEffect(() => {
@@ -156,8 +198,14 @@ const Leaves = () => {
     }
     
     try {
-      const days = calculateDays(newLeave.startDate, newLeave.endDate);
-      
+      const isHalfDay = newLeave.leaveDuration === 'half';
+      const days = isHalfDay ? 0.5 : calculateDays(newLeave.startDate, newLeave.endDate);
+
+      if (isHalfDay && newLeave.startDate !== newLeave.endDate) {
+        alert('Half-day leave must be for a single date');
+        return;
+      }
+
       await leaveAPI.create({
         ...newLeave,
         days
@@ -165,12 +213,115 @@ const Leaves = () => {
       
       alert('Leave application submitted successfully!');
       setShowApplyModal(false);
-      setNewLeave({ leaveType: 'casual', startDate: '', endDate: '', reason: '' });
+      setNewLeave({ leaveType: 'casual', leaveDuration: 'full', startDate: '', endDate: '', reason: '' });
       fetchLeaves();
     } catch (error) {
       alert(error.message || 'Failed to apply for leave');
     }
   };
+
+  const openBalanceModal = async () => {
+    setShowBalanceModal(true);
+    setBalanceEmployeeSearch('');
+    setBalanceSaveMessage('');
+    setBalanceLoading(true);
+    try {
+      const response = await employeesAPI.getAll();
+      const list = response.data || [];
+      setBalanceEmployees(list);
+      if (list.length && !balanceForm.employeeId) {
+        const first = list[0];
+        setBalanceForm({
+          employeeId: first._id,
+          personal: first.leaveBalance?.personal ?? 0,
+          sick: first.leaveBalance?.sick ?? 0,
+          casual: first.leaveBalance?.casual ?? 0,
+        });
+      }
+    } catch (error) {
+      alert(error.message || 'Failed to load employees');
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
+
+  const handleBalanceEmployeeChange = (employeeId) => {
+    const employee = balanceEmployees.find((item) => item._id === employeeId);
+    setBalanceSaveMessage('');
+    setBalanceForm({
+      employeeId,
+      personal: employee?.leaveBalance?.personal ?? 0,
+      sick: employee?.leaveBalance?.sick ?? 0,
+      casual: employee?.leaveBalance?.casual ?? 0,
+    });
+  };
+
+  const handleBalanceSave = async (e) => {
+    e.preventDefault();
+    if (!balanceForm.employeeId) {
+      return;
+    }
+    try {
+      setBalanceLoading(true);
+      setBalanceSaveMessage('');
+      const response = await leaveAPI.updateBalance(balanceForm.employeeId, {
+        personal: balanceForm.personal,
+        sick: balanceForm.sick,
+        casual: balanceForm.casual,
+      });
+
+      const updated = response?.data;
+      if (updated?._id) {
+        setBalanceEmployees((prev) =>
+          prev.map((employee) => (employee._id === updated._id ? { ...employee, ...updated } : employee))
+        );
+      }
+
+      setBalanceSaveMessage('Leave balance updated successfully.');
+    } catch (error) {
+      alert(error.message || 'Failed to update leave balance');
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
+
+  const getBalanceEmployeeDisplayName = (employee) => {
+    if (!employee) {
+      return '';
+    }
+    const name = `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
+    const code = employee.employeeId ? ` (${employee.employeeId})` : '';
+    return `${name}${code}`.trim();
+  };
+
+  const normalizeSearchText = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/[\s(){}._-]+|\[|\]/g, '');
+
+  const balanceEmployeesFiltered = balanceEmployees.filter((employee) => {
+    if (!balanceEmployeeSearch.trim()) {
+      return true;
+    }
+
+    const term = normalizeSearchText(balanceEmployeeSearch.trim());
+    if (!term) {
+      return true;
+    }
+
+    const haystack = normalizeSearchText(
+      `${employee.firstName || ''} ${employee.lastName || ''} ${employee.employeeId || ''} ${employee.email || ''}`
+    );
+
+    return haystack.includes(term);
+  });
+
+  const selectedBalanceEmployee = balanceEmployees.find((employee) => employee._id === balanceForm.employeeId);
+  const lastAdjustedAt = selectedBalanceEmployee?.leaveBalanceMeta?.lastAdjustedAt;
+  const lastAdjustedBy = selectedBalanceEmployee?.leaveBalanceMeta?.lastAdjustedBy;
+  const lastAdjustedByLabel = lastAdjustedBy
+    ? `${lastAdjustedBy.firstName || ''} ${lastAdjustedBy.lastName || ''}`.trim() || lastAdjustedBy.employeeId || ''
+    : '';
 
   const handleUpdateStatus = async (leaveId, status) => {
     const remarks = status === 'rejected' 
@@ -208,7 +359,7 @@ const Leaves = () => {
   };
 
   const getLeaveTypeStyle = (type) => {
-    return leaveTypes.find(lt => lt.value === type) || leaveTypes[0];
+    return leaveTypeStyles.find(lt => lt.value === type) || leaveTypeStyles[0];
   };
 
   const formatDate = (date) => {
@@ -263,9 +414,16 @@ const Leaves = () => {
           <p className="text-muted">Manage employee leave requests</p>
         </div>
         <div className="col-auto">
-          <button className="btn btn-primary" onClick={() => setShowApplyModal(true)}>
-            <i className="bi bi-calendar-plus me-2"></i>Apply for Leave
-          </button>
+          <div className="d-flex gap-2">
+            {canEditBalances && (
+              <button className="btn btn-outline-primary" onClick={openBalanceModal}>
+                <i className="bi bi-sliders me-2"></i>Adjust Balance
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => setShowApplyModal(true)}>
+              <i className="bi bi-calendar-plus me-2"></i>Apply for Leave
+            </button>
+          </div>
         </div>
       </div>
 
@@ -561,9 +719,18 @@ const Leaves = () => {
                     <select
                       className="form-select"
                       value={newLeave.leaveType}
-                      onChange={(e) => setNewLeave({ ...newLeave, leaveType: e.target.value })}
+                      onChange={(e) => {
+                        const nextType = e.target.value;
+                        const keepHalf = ['sick', 'casual'].includes(nextType) ? newLeave.leaveDuration : 'full';
+                        setNewLeave({
+                          ...newLeave,
+                          leaveType: nextType,
+                          leaveDuration: keepHalf,
+                          endDate: keepHalf === 'half' ? newLeave.startDate : newLeave.endDate,
+                        });
+                      }}
                     >
-                      {leaveTypes.map(type => (
+                      {leaveTypeOptions.map(type => (
                         <option key={type.value} value={type.value}>
                           {type.icon} {type.label}
                         </option>
@@ -571,13 +738,41 @@ const Leaves = () => {
                     </select>
                   </div>
 
+                  {['sick', 'casual'].includes(newLeave.leaveType) && (
+                    <div className="mb-3">
+                      <label className="form-label">Duration</label>
+                      <select
+                        className="form-select"
+                        value={newLeave.leaveDuration}
+                        onChange={(e) => {
+                          const leaveDuration = e.target.value;
+                          setNewLeave({
+                            ...newLeave,
+                            leaveDuration,
+                            endDate: leaveDuration === 'half' ? newLeave.startDate : newLeave.endDate,
+                          });
+                        }}
+                      >
+                        <option value="full">Full Day</option>
+                        <option value="half">Half Day</option>
+                      </select>
+                    </div>
+                  )}
+
                   <div className="mb-3">
                     <label className="form-label">Start Date</label>
                     <input
                       type="date"
                       className="form-control"
                       value={newLeave.startDate}
-                      onChange={(e) => setNewLeave({ ...newLeave, startDate: e.target.value })}
+                      onChange={(e) => {
+                        const startDate = e.target.value;
+                        setNewLeave({
+                          ...newLeave,
+                          startDate,
+                          endDate: newLeave.leaveDuration === 'half' ? startDate : newLeave.endDate,
+                        });
+                      }}
                       required
                     />
                   </div>
@@ -590,6 +785,7 @@ const Leaves = () => {
                       value={newLeave.endDate}
                       onChange={(e) => setNewLeave({ ...newLeave, endDate: e.target.value })}
                       required
+                      disabled={newLeave.leaveDuration === 'half'}
                     />
                   </div>
 
@@ -608,7 +804,7 @@ const Leaves = () => {
                   {newLeave.startDate && newLeave.endDate && (
                     <div className="alert alert-info">
                       <i className="bi bi-info-circle me-2"></i>
-                      <strong>Duration:</strong> {calculateDays(newLeave.startDate, newLeave.endDate)} {calculateDays(newLeave.startDate, newLeave.endDate) === 1 ? 'day' : 'days'}
+                      <strong>Duration:</strong> {newLeave.leaveDuration === 'half' ? 0.5 : calculateDays(newLeave.startDate, newLeave.endDate)} {newLeave.leaveDuration === 'half' || calculateDays(newLeave.startDate, newLeave.endDate) === 1 ? 'day' : 'days'}
                     </div>
                   )}
                 </div>
@@ -618,13 +814,144 @@ const Leaves = () => {
                     className="btn btn-secondary"
                     onClick={() => {
                       setShowApplyModal(false);
-                      setNewLeave({ leaveType: 'casual', startDate: '', endDate: '', reason: '' });
+                      setNewLeave({ leaveType: 'casual', leaveDuration: 'full', startDate: '', endDate: '', reason: '' });
                     }}
                   >
                     Cancel
                   </button>
                   <button type="submit" className="btn btn-primary">
                     <i className="bi bi-send me-2"></i>Submit Application
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBalanceModal && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Adjust Leave Balance</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowBalanceModal(false)}
+                ></button>
+              </div>
+              <form onSubmit={handleBalanceSave}>
+                <div className="modal-body">
+                  {balanceSaveMessage && (
+                    <div className="alert alert-success py-2 small" role="alert">
+                      <i className="bi bi-check-circle me-2"></i>
+                      {balanceSaveMessage}
+                    </div>
+                  )}
+
+                  <div className="mb-3">
+                    <label className="form-label">Employee</label>
+                    <input
+                      type="text"
+                      className="form-control mb-2"
+                      placeholder="🔍 Search by name or code..."
+                      value={balanceEmployeeSearch}
+                      onChange={(e) => setBalanceEmployeeSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <select
+                      className="form-select"
+                      value={balanceForm.employeeId}
+                      onChange={(e) => handleBalanceEmployeeChange(e.target.value)}
+                      disabled={balanceLoading}
+                      required
+                    >
+                      {balanceEmployeesFiltered.map((employee) => (
+                        <option key={employee._id} value={employee._id}>
+                          {getBalanceEmployeeDisplayName(employee)}
+                          {employee.leaveBalanceMeta?.lastAdjustedAt
+                            ? ` — updated${employee.leaveBalanceMeta?.lastAdjustedBy?.firstName ? ` by ${(
+                                `${employee.leaveBalanceMeta.lastAdjustedBy.firstName || ''} ${employee.leaveBalanceMeta.lastAdjustedBy.lastName || ''}`
+                              ).trim()}` : ''}`
+                            : ''}
+                        </option>
+                      ))}
+                    </select>
+
+                    {lastAdjustedAt ? (
+                      <div className="text-muted small mt-2">
+                        <i className="bi bi-info-circle me-1"></i>
+                        Updated previously: {new Date(lastAdjustedAt).toLocaleString()}
+                        {lastAdjustedByLabel ? ` by ${lastAdjustedByLabel}` : ''}
+                      </div>
+                    ) : (
+                      <div className="text-muted small mt-2">
+                        <i className="bi bi-info-circle me-1"></i>
+                        Not updated yet
+                      </div>
+                    )}
+                    {balanceEmployeeSearch.trim() && (
+                      <div className="text-muted small mt-1">
+                        Showing {balanceEmployeesFiltered.length} of {balanceEmployees.length} employees
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="row g-3">
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Personal</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        className="form-control"
+                        value={balanceForm.personal}
+                        onChange={(e) => setBalanceForm({ ...balanceForm, personal: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Sick</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        className="form-control"
+                        value={balanceForm.sick}
+                        onChange={(e) => setBalanceForm({ ...balanceForm, sick: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Casual</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        className="form-control"
+                        value={balanceForm.casual}
+                        onChange={(e) => setBalanceForm({ ...balanceForm, casual: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setShowBalanceModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={balanceLoading}>
+                    {balanceLoading ? 'Saving...' : 'Save Balance'}
                   </button>
                 </div>
               </form>

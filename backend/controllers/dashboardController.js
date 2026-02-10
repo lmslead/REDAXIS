@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import Attendance from '../models/Attendance.js';
 import Leave from '../models/Leave.js';
 import Event from '../models/Event.js';
+import { ensureMonthlyLeaveBalance } from '../utils/leaveBalance.js';
 
 export const getDashboardStats = async (req, res) => {
   try {
@@ -24,6 +25,8 @@ export const getDashboardStats = async (req, res) => {
       status: 'scheduled',
     });
 
+    const userBalance = await ensureMonthlyLeaveBalance(req.user.id);
+
     res.status(200).json({
       success: true,
       data: {
@@ -33,6 +36,7 @@ export const getDashboardStats = async (req, res) => {
         todayAttendance,
         pendingLeaves,
         upcomingEvents,
+        leaveBalance: userBalance?.leaveBalance || { personal: 0, sick: 0, casual: 0 },
       },
     });
   } catch (error) {

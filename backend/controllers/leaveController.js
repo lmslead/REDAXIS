@@ -1,6 +1,37 @@
 import Leave from '../models/Leave.js';
 import Attendance from '../models/Attendance.js';
 import User from '../models/User.js';
+import {
+  ensureMonthlyLeaveBalance,
+  getCurrentMonthKey,
+  getLeaveBalanceType,
+} from '../utils/leaveBalance.js';
+
+const normalizeDays = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  const rounded = Math.round(parsed * 2) / 2;
+  return Math.abs(rounded - parsed) < 0.001 ? rounded : null;
+};
+
+const calculateDaysFromDates = (startDate, endDate) => {
+  if (!startDate || !endDate) {
+    return null;
+  }
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return null;
+  }
+  if (end < start) {
+    return null;
+  }
+  const diffTime = Math.abs(end - start);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  return diffDays;
+};
 
 // Helper function to check if an employee is in the manager's reporting chain
 const isEmployeeInReportingChain = async (managerId, employeeId) => {
@@ -182,7 +213,28 @@ export const getLeaves = async (req, res) => {
 
 export const createLeave = async (req, res) => {
   try {
+    const requestedDays = normalizeDays(req.body.days) ?? calculateDaysFromDates(req.body.startDate, req.body.endDate);
+    if (!requestedDays) {
+      return res.status(400).json({ success: false, message: 'Invalid leave duration' });
+    }
+
+    const balanceType = getLeaveBalanceType(req.body.leaveType);
+    if (balanceType) {
+      const userBalance = await ensureMonthlyLeaveBalance(req.user.id);
+      if (!userBalance) {
+        return res.status(404).json({ success: false, message: 'Employee not found' });
+      }
+      const currentBalance = userBalance.leaveBalance?.[balanceType] ?? 0;
+      if (currentBalance < requestedDays) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient ${balanceType} leave balance`,
+        });
+      }
+    }
+
     req.body.employee = req.user.id;
+    req.body.days = requestedDays;
     const leave = await Leave.create(req.body);
     res.status(201).json({ success: true, data: leave });
   } catch (error) {
@@ -330,6 +382,37 @@ export const updateLeaveStatus = async (req, res) => {
       }
     }
 
+    const previousStatus = leave.status;
+    const balanceType = getLeaveBalanceType(leave.leaveType);
+    const leaveDays = normalizeDays(leave.days) || 0;
+
+    if (status === 'approved' && previousStatus !== 'approved' && balanceType) {
+      const employeeBalance = await ensureMonthlyLeaveBalance(leave.employee._id);
+      if (!employeeBalance) {
+        return res.status(404).json({ success: false, message: 'Employee not found' });
+      }
+      const currentBalance = employeeBalance.leaveBalance?.[balanceType] ?? 0;
+      if (currentBalance < leaveDays) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient ${balanceType} leave balance`,
+        });
+      }
+      await User.findByIdAndUpdate(
+        leave.employee._id,
+        { $inc: { [`leaveBalance.${balanceType}`]: -leaveDays } },
+        { new: true }
+      );
+    }
+
+    if (status === 'rejected' && previousStatus === 'approved' && balanceType) {
+      await User.findByIdAndUpdate(
+        leave.employee._id,
+        { $inc: { [`leaveBalance.${balanceType}`]: leaveDays } },
+        { new: true }
+      );
+    }
+
     // Update leave status
     leave.status = status;
     leave.remarks = remarks;
@@ -438,6 +521,55 @@ export const syncAllApprovedLeaves = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error syncing approved leaves:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update leave balances for an employee
+// @route   PUT /api/leaves/balance/:employeeId
+// @access  Private (Finance L3 and L4 only)
+export const updateLeaveBalance = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const updates = {};
+    const fields = ['personal', 'sick', 'casual'];
+
+    fields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        const value = Number(req.body[field]);
+        if (!Number.isFinite(value) || value < 0) {
+          throw new Error(`Invalid ${field} leave balance`);
+        }
+        updates[`leaveBalance.${field}`] = Math.round(value * 2) / 2;
+      }
+    });
+
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ success: false, message: 'No leave balance updates provided' });
+    }
+
+    const userBalance = await ensureMonthlyLeaveBalance(employeeId);
+    if (!userBalance) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const updatedEmployee = await User.findByIdAndUpdate(
+      employeeId,
+      {
+        $set: {
+          ...updates,
+          leaveBalanceMonth: getCurrentMonthKey(),
+          'leaveBalanceMeta.lastAdjustedAt': new Date(),
+          'leaveBalanceMeta.lastAdjustedBy': req.user.id,
+        },
+      },
+      { new: true, runValidators: true }
+    ).select('firstName lastName employeeId leaveBalance leaveBalanceMonth leaveBalanceMeta');
+
+    await updatedEmployee.populate('leaveBalanceMeta.lastAdjustedBy', 'firstName lastName employeeId');
+
+    res.status(200).json({ success: true, data: updatedEmployee });
+  } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };

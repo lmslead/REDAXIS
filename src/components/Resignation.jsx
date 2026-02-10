@@ -83,7 +83,7 @@ const resignationAPI = {
         if (error?.message) {
           message = error.message;
         }
-      } catch (parseError) {
+      } catch {
         // Ignore parse errors and fall back to default message
       }
       throw new Error(message);

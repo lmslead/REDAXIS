@@ -24,6 +24,7 @@ import Resignation from "./components/Resignation";
 import Policies from "./components/Policies";
 import PolicyGate from "./components/PolicyGate";
 import ScreenshotShield from "./components/ScreenshotShield";
+import Polls from "./components/Polls";
 import { getToken, authAPI, setUser as persistUser, getUser, policiesAPI } from "./services/api";
 
 const MOBILE_BREAKPOINT = 992;
@@ -182,6 +183,7 @@ function App() {
                     isMobile={isMobileView}
                     isOpen={sidebarOpen}
                     onClose={() => setSidebarOpen(false)}
+                    user={appUser}
                   />
                   {isMobileView && sidebarOpen && (
                     <div
@@ -214,6 +216,7 @@ function App() {
                       <Route path="/payroll" element={<Payroll />} />
                       <Route path="/feed" element={<Feed />} />
                       <Route path="/recognition" element={<Recognition />} />
+                      <Route path="/polls" element={<Polls />} />
                       <Route path="/chat" element={<Chat />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/assets" element={<Assets />} />

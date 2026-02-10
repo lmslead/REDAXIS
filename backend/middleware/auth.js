@@ -174,3 +174,45 @@ export const authorizeHRDepartment = (req, res, next) => {
     message: 'Access restricted to Human Resources department members only',
   });
 };
+
+export const authorizeFinanceL3OrL4 = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'User session invalid. Please re-login.' });
+  }
+
+  const userLevel = req.user.managementLevel || 0;
+
+  if (userLevel >= 4) {
+    return next();
+  }
+
+  if (isFinanceL3User(req.user)) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: 'Access restricted to Finance L3 and L4 users only',
+  });
+};
+
+export const authorizeExitDateUpdate = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'User session invalid. Please re-login.' });
+  }
+
+  const userLevel = req.user.managementLevel || 0;
+
+  if (userLevel >= 4) {
+    return next();
+  }
+
+  if (userLevel === 3 && (isFinanceL3User(req.user) || isHRDepartmentUser(req.user))) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: 'Exit date updates are restricted to HR/Finance L3 and L4 users only',
+  });
+};

@@ -206,3 +206,30 @@ export const changePassword = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Upload profile image
+// @route   POST /api/auth/profile-image
+// @access  Private
+export const uploadProfileImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Please upload an image file' });
+    }
+
+    const relativePath = `/uploads/profiles/${req.file.filename}`;
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { profileImage: relativePath },
+      { new: true, runValidators: true }
+    ).populate('department', 'name code');
+
+    res.status(200).json({
+      success: true,
+      data: user,
+      message: 'Profile image updated successfully',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

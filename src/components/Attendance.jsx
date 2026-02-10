@@ -42,7 +42,6 @@ const Attendance = () => {
         console.error('Error fetching employees:', error);
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManage]);
 
   useEffect(() => {

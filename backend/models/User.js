@@ -146,12 +146,21 @@ const userSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'inactive', 'on-leave'],
+    enum: ['active', 'inactive', 'on-leave', 'absconded'],
     default: 'active',
+  },
+  employmentType: {
+    type: String,
+    enum: ['full-time', 'internship', 'probation', 'contract'],
+    default: 'full-time',
   },
   isActive: {
     type: Boolean,
     default: true,
+  },
+  exitDate: {
+    type: Date,
+    default: null,
   },
   // === REPORTING MANAGER HIERARCHY FIELDS ===
   reportingManager: {
@@ -175,6 +184,35 @@ const userSchema = new mongoose.Schema({
   canManageAttendance: {
     type: Boolean,
     default: false, // true for L1, L2, L3, L4
+  },
+  leaveBalance: {
+    personal: {
+      type: Number,
+      default: 0,
+    },
+    sick: {
+      type: Number,
+      default: 0,
+    },
+    casual: {
+      type: Number,
+      default: 0,
+    },
+  },
+  leaveBalanceMonth: {
+    type: String,
+    default: null,
+  },
+  leaveBalanceMeta: {
+    lastAdjustedAt: {
+      type: Date,
+      default: null,
+    },
+    lastAdjustedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
   },
   // === WORK SCHEDULE ===
   saturdayWorking: {

@@ -23,6 +23,7 @@ import assetsRoutes from './routes/assetsRoutes.js';
 import resignationRoutes from './routes/resignationRoutes.js';
 import employeeDocumentRoutes from './routes/employeeDocumentRoutes.js';
 import policyRoutes from './routes/policyRoutes.js';
+import pollRoutes from './routes/pollRoutes.js';
 
 // Import utilities
 import { setupEscalationCron } from './utils/escalationService.js';
@@ -81,6 +82,7 @@ app.use('/api/assets', assetsRoutes);
 app.use('/api/resignations', resignationRoutes);
 app.use('/api/employee-documents', employeeDocumentRoutes);
 app.use('/api/policies', policyRoutes);
+app.use('/api/polls', pollRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

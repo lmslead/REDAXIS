@@ -7,15 +7,18 @@ import {
   deleteEmployee,
   getEmployeeStats,
   updateEmployeeStatus,
+  updateEmployeeExitDate,
   exportEmployeeJoinings,
+  exportEmployeeList,
 } from '../controllers/employeeController.js';
-import { protect, authorizeLevel, authorizeHRDepartment } from '../middleware/auth.js';
+import { protect, authorizeLevel, authorizeHRDepartment, authorizeFinanceL3OrL4, authorizeExitDateUpdate } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Stats require L2+ (Senior Manager and Admin)
 router.get('/stats', protect, authorizeLevel(2), getEmployeeStats);
 router.get('/export/joinings', protect, authorizeHRDepartment, exportEmployeeJoinings);
+router.get('/export/list', protect, authorizeFinanceL3OrL4, exportEmployeeList);
 
 // Get employees - handled internally based on level (all can view based on their access)
 router.get('/', protect, getEmployees);
@@ -28,5 +31,7 @@ router.delete('/:id', protect, authorizeLevel(3), deleteEmployee); // Only L3 ca
 
 // Update employee status (activate/inactivate/suspend) - L3 and L4 only
 router.patch('/:id/status', protect, authorizeLevel(3), updateEmployeeStatus);
+// Update employee exit date - HR/Finance L3 and L4 only
+router.patch('/:id/exit-date', protect, authorizeExitDateUpdate, updateEmployeeExitDate);
 
 export default router;

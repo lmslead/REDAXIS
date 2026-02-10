@@ -1,6 +1,45 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import Cropper from 'react-easy-crop';
 import { authAPI, employeeDocumentsAPI } from '../services/api';
 import './Profile.css';
+
+// Helper function to create cropped image from canvas
+const createImage = (url) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener('load', () => resolve(image));
+    image.addEventListener('error', (error) => reject(error));
+    image.setAttribute('crossOrigin', 'anonymous');
+    image.src = url;
+  });
+
+const getCroppedImg = async (imageSrc, pixelCrop) => {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const size = Math.min(pixelCrop.width, pixelCrop.height);
+  canvas.width = size;
+  canvas.height = size;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    size,
+    size
+  );
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      resolve(blob);
+    }, 'image/jpeg', 0.95);
+  });
+};
 
 const createEmptyAddress = () => ({
   street: '',
@@ -27,6 +66,15 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const profileImageInputRef = useRef(null);
+  
+  // Image cropping state
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -190,6 +238,70 @@ const Profile = () => {
     }
   };
 
+  const handleProfileImageClick = () => {
+    if (profileImageInputRef.current) {
+      profileImageInputRef.current.value = '';
+      profileImageInputRef.current.click();
+    }
+  };
+
+  const handleProfileImageChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!/^image\/(png|jpe?g|gif|webp)$/i.test(file.type)) {
+      alert('Please select a valid image file (PNG, JPG, GIF, or WEBP)');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size must be less than 5MB');
+      event.target.value = '';
+      return;
+    }
+
+    // Create a URL for the selected image and show crop modal
+    const imageUrl = URL.createObjectURL(file);
+    setImageToCrop(imageUrl);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setShowCropModal(true);
+    event.target.value = '';
+  };
+
+  const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleCropCancel = () => {
+    setShowCropModal(false);
+    setImageToCrop(null);
+    setCroppedAreaPixels(null);
+  };
+
+  const handleCropConfirm = async () => {
+    if (!imageToCrop || !croppedAreaPixels) return;
+
+    setUploadingImage(true);
+    try {
+      const croppedBlob = await getCroppedImg(imageToCrop, croppedAreaPixels);
+      const croppedFile = new File([croppedBlob], 'profile.jpg', { type: 'image/jpeg' });
+      
+      const response = await authAPI.uploadProfileImage(croppedFile);
+      if (response.data) {
+        setUser(response.data);
+      }
+      alert('Profile image updated successfully!');
+      setShowCropModal(false);
+      setImageToCrop(null);
+    } catch (error) {
+      alert(error.message || 'Failed to upload profile image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const triggerDocumentUpload = (docType) => {
     setDocUploadError('');
     const inputRef = fileInputRefs.current[docType];
@@ -273,12 +385,67 @@ const Profile = () => {
         <div className="col-lg-4 mb-4">
           <div className="card border-0 shadow-sm">
             <div className="card-body text-center py-5">
-              <img
-                src={user?.profileImage || '/assets/client.jpg'}
-                alt="Profile"
-                className="rounded-circle mb-3"
-                style={{ width: '120px', height: '120px', objectFit: 'cover' }}
+              {/* Hidden file input for profile image */}
+              <input
+                type="file"
+                ref={profileImageInputRef}
+                onChange={handleProfileImageChange}
+                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                style={{ display: 'none' }}
               />
+              
+              {/* Profile Image with Upload Overlay */}
+              <div 
+                className="profile-image-container mx-auto mb-3"
+                onClick={handleProfileImageClick}
+                style={{ 
+                  position: 'relative', 
+                  width: '120px', 
+                  height: '120px',
+                  cursor: 'pointer'
+                }}
+                title="Click to change profile picture"
+              >
+                <img
+                  src={user?.profileImage || '/assets/client.jpg'}
+                  alt="Profile"
+                  className="rounded-circle"
+                  style={{ 
+                    width: '120px', 
+                    height: '120px', 
+                    objectFit: 'cover',
+                    border: '3px solid #e2e8f0'
+                  }}
+                />
+                
+                {/* Upload Overlay */}
+                <div 
+                  className="profile-image-overlay"
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0,
+                    transition: 'opacity 0.2s ease'
+                  }}
+                >
+                  {uploadingImage ? (
+                    <span className="spinner-border spinner-border-sm text-white" role="status">
+                      <span className="visually-hidden">Uploading...</span>
+                    </span>
+                  ) : (
+                    <i className="bi bi-camera-fill text-white fs-4"></i>
+                  )}
+                </div>
+              </div>
+              
               <h5 className="fw-bold mb-1">{user?.firstName} {user?.lastName}</h5>
               <p className="text-muted mb-2">{user?.position || 'Employee'}</p>
               <span className={`badge ${
@@ -321,6 +488,16 @@ const Profile = () => {
               <div className="mb-3">
                 <small className="text-muted d-block">Joining Date</small>
                 <strong>{user?.joiningDate ? new Date(user.joiningDate).toLocaleDateString() : 'N/A'}</strong>
+              </div>
+              <div className="mb-3">
+                <small className="text-muted d-block">Employment Type</small>
+                <span className={`badge ${
+                  user?.employmentType === 'full-time' ? 'bg-success' :
+                  user?.employmentType === 'probation' ? 'bg-warning text-dark' :
+                  user?.employmentType === 'internship' ? 'bg-info text-dark' : 'bg-secondary'
+                }`} style={{ textTransform: 'capitalize' }}>
+                  {user?.employmentType?.replace('-', ' ') || 'Full Time'}
+                </span>
               </div>
               <div>
                 <small className="text-muted d-block">Status</small>
@@ -921,6 +1098,76 @@ const Profile = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Crop Modal */}
+      {showCropModal && imageToCrop && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}>
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '500px' }}>
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Adjust Profile Photo</h5>
+                <button type="button" className="btn-close" onClick={handleCropCancel}></button>
+              </div>
+              <div className="modal-body p-0">
+                <div className="crop-container" style={{ position: 'relative', height: '350px', background: '#1a1a1a' }}>
+                  <Cropper
+                    image={imageToCrop}
+                    crop={crop}
+                    zoom={zoom}
+                    aspect={1}
+                    cropShape="round"
+                    showGrid={false}
+                    onCropChange={setCrop}
+                    onCropComplete={onCropComplete}
+                    onZoomChange={setZoom}
+                  />
+                </div>
+                <div className="p-3">
+                  <label className="form-label d-flex align-items-center gap-2 mb-0">
+                    <i className="bi bi-zoom-out"></i>
+                    <input
+                      type="range"
+                      className="form-range flex-grow-1"
+                      min={1}
+                      max={3}
+                      step={0.1}
+                      value={zoom}
+                      onChange={(e) => setZoom(Number(e.target.value))}
+                    />
+                    <i className="bi bi-zoom-in"></i>
+                  </label>
+                  <p className="text-muted text-center mt-2 mb-0" style={{ fontSize: '0.85rem' }}>
+                    Drag to reposition, use slider to zoom
+                  </p>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={handleCropCancel}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleCropConfirm}
+                  disabled={uploadingImage}
+                >
+                  {uploadingImage ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-check-lg me-1"></i>
+                      Save Photo
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
