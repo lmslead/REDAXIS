@@ -1749,40 +1749,84 @@ const Employees = () => {
                       ) : (
                         <div className="row g-3">
                           {documentTypes.map((type) => {
-                            const record = documentRecords.find((doc) => doc.docType === type.key);
-                            const uploadedDate = record?.uploadedAt ? new Date(record.uploadedAt) : null;
+                            // Get all records for this type if allowMultiple, else single record
+                            const records = type.allowMultiple 
+                              ? documentRecords.filter((doc) => doc.docType === type.key)
+                              : [];
+                            const singleRecord = !type.allowMultiple 
+                              ? documentRecords.find((doc) => doc.docType === type.key)
+                              : null;
+                            const hasDocuments = type.allowMultiple ? records.length > 0 : !!singleRecord;
+                            
                             return (
                               <div className="col-md-6" key={type.key}>
-                                <div className={`document-status-card ${record ? 'uploaded' : 'pending'}`}>
+                                <div className={`document-status-card ${hasDocuments ? 'uploaded' : 'pending'}`}>
                                   <div className="d-flex justify-content-between align-items-start">
                                     <div>
                                       <h6 className="mb-1">{type.label}</h6>
                                       <p className="text-muted small mb-1">{type.description}</p>
                                     </div>
-                                    <span className={`badge ${record ? 'bg-success' : 'bg-secondary'}`}>
-                                      {record ? 'Uploaded' : 'Pending'}
+                                    <span className={`badge ${hasDocuments ? 'bg-success' : 'bg-secondary'}`}>
+                                      {type.allowMultiple 
+                                        ? (records.length > 0 ? `${records.length} Uploaded` : 'Pending')
+                                        : (singleRecord ? 'Uploaded' : 'Pending')}
                                     </span>
                                   </div>
-                                  {record ? (
+                                  {type.allowMultiple ? (
+                                    records.length > 0 ? (
+                                      <div className="document-meta">
+                                        {records.map((record, idx) => {
+                                          const uploadedDate = record?.uploadedAt ? new Date(record.uploadedAt) : null;
+                                          return (
+                                            <div key={record._id} className="border-bottom py-2">
+                                              <small className="text-muted d-block">
+                                                Document {idx + 1} - {uploadedDate?.toLocaleDateString() || 'N/A'}
+                                              </small>
+                                              <div className="d-flex flex-wrap gap-3 align-items-center mt-1">
+                                                <button
+                                                  type="button"
+                                                  className="btn btn-link p-0 small"
+                                                  onClick={() => handleDocumentPreview(record)}
+                                                >
+                                                  <i className="bi bi-eye me-1"></i>View
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  className="btn btn-link p-0 small"
+                                                  onClick={() => handleDocumentDownload(record)}
+                                                >
+                                                  <i className="bi bi-download me-1"></i>Download
+                                                </button>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <div className="document-meta text-muted small">
+                                        No documents uploaded yet. Can upload multiple.
+                                      </div>
+                                    )
+                                  ) : singleRecord ? (
                                     <div className="document-meta">
                                       <small className="text-muted d-block">Last updated</small>
                                       <strong className="d-block mb-2">
-                                        {uploadedDate
-                                          ? `${uploadedDate.toLocaleDateString()} • ${uploadedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                        {singleRecord.uploadedAt
+                                          ? `${new Date(singleRecord.uploadedAt).toLocaleDateString()} • ${new Date(singleRecord.uploadedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                                           : 'Recently updated'}
                                       </strong>
                                       <div className="d-flex flex-wrap gap-3 align-items-center">
                                         <button
                                           type="button"
                                           className="btn btn-link p-0 small"
-                                          onClick={() => handleDocumentPreview(record)}
+                                          onClick={() => handleDocumentPreview(singleRecord)}
                                         >
                                           <i className="bi bi-eye me-1"></i>View PDF
                                         </button>
                                         <button
                                           type="button"
                                           className="btn btn-link p-0 small"
-                                          onClick={() => handleDocumentDownload(record)}
+                                          onClick={() => handleDocumentDownload(singleRecord)}
                                         >
                                           <i className="bi bi-download me-1"></i>Download PDF
                                         </button>
@@ -1838,7 +1882,11 @@ const Employees = () => {
                                 }}
                                 required
                               />
-                              <small className="text-muted">Max 10 MB. Existing files will be replaced.</small>
+                              <small className="text-muted">
+                                Max 10 MB. {documentTypes.find((t) => t.key === documentForm.docType)?.allowMultiple
+                                  ? 'A new document will be added.'
+                                  : 'Existing file will be replaced.'}
+                              </small>
                             </div>
                             <button
                               type="submit"

@@ -531,26 +531,82 @@ const Profile = () => {
                       <p className="text-muted small mb-0">No employment letter types configured yet.</p>
                     )}
                     {sharedDocumentTypes.map((type) => {
-                      const record = documentRecords.find((doc) => doc.docType === type.key);
-                      const uploadedDate = record?.uploadedAt ? new Date(record.uploadedAt) : null;
+                      // For types that allow multiple, get all records; otherwise get single record
+                      const records = type.allowMultiple 
+                        ? documentRecords.filter((doc) => doc.docType === type.key)
+                        : [];
+                      const singleRecord = !type.allowMultiple 
+                        ? documentRecords.find((doc) => doc.docType === type.key)
+                        : null;
+                      
+                      // Render multiple documents for allowMultiple types
+                      if (type.allowMultiple) {
+                        return (
+                          <div key={type.key}>
+                            <div className={`profile-document-row ${records.length > 0 ? 'ready' : 'pending'}`}>
+                              <div>
+                                <div className="profile-document-title">{type.label}</div>
+                                <small className="text-muted">
+                                  {records.length > 0 
+                                    ? `${records.length} document${records.length > 1 ? 's' : ''} uploaded`
+                                    : type.description}
+                                </small>
+                              </div>
+                              {records.length === 0 && (
+                                <span className="badge bg-secondary">Pending</span>
+                              )}
+                            </div>
+                            {records.length > 0 && (
+                              <div className="ms-3 mb-2">
+                                {records.map((record, idx) => {
+                                  const uploadedDate = record?.uploadedAt ? new Date(record.uploadedAt) : null;
+                                  return (
+                                    <div 
+                                      key={record._id} 
+                                      className="d-flex justify-content-between align-items-center py-2 border-bottom"
+                                      style={{ fontSize: '0.85rem' }}
+                                    >
+                                      <span className="text-muted">
+                                        <i className="bi bi-file-earmark-pdf me-1"></i>
+                                        {uploadedDate ? uploadedDate.toLocaleDateString() : `Document ${idx + 1}`}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-primary"
+                                        onClick={() => handleDownloadDocument(record)}
+                                        style={{ padding: '0.15rem 0.5rem', fontSize: '0.75rem' }}
+                                      >
+                                        <i className="bi bi-eye me-1"></i>View
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      
+                      // Render single document for regular types
+                      const uploadedDate = singleRecord?.uploadedAt ? new Date(singleRecord.uploadedAt) : null;
                       return (
                         <div
-                          className={`profile-document-row ${record ? 'ready' : 'pending'}`}
+                          className={`profile-document-row ${singleRecord ? 'ready' : 'pending'}`}
                           key={type.key}
                         >
                           <div>
                             <div className="profile-document-title">{type.label}</div>
                             <small className="text-muted">
-                              {record
+                              {singleRecord
                                 ? `Updated on ${uploadedDate ? uploadedDate.toLocaleDateString() : 'N/A'}`
                                 : type.description}
                             </small>
                           </div>
-                          {record ? (
+                          {singleRecord ? (
                             <button
                               type="button"
                               className="btn btn-sm btn-outline-primary"
-                              onClick={() => handleDownloadDocument(record)}
+                              onClick={() => handleDownloadDocument(singleRecord)}
                             >
                               <i className="bi bi-eye me-1"></i>View
                             </button>

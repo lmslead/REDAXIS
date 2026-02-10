@@ -125,7 +125,7 @@ const Leaves = () => {
   });
 
   const leaveTypeOptions = [
-    { value: 'personal', label: 'Personal Leave', icon: '🧘', color: 'info' },
+    { value: 'personal', label: 'PL (Paid Leave)', icon: '🧘', color: 'info' },
     { value: 'casual', label: 'Casual Leave', icon: '🏖️', color: 'primary' },
     { value: 'sick', label: 'Sick Leave', icon: '🤒', color: 'danger' },
     { value: 'unpaid', label: 'Unpaid Leave', icon: '📅', color: 'secondary' }
@@ -905,7 +905,7 @@ const Leaves = () => {
 
                   <div className="row g-3">
                     <div className="col-12 col-md-4">
-                      <label className="form-label">Personal</label>
+                      <label className="form-label">PL (Paid Leave)</label>
                       <input
                         type="number"
                         step="0.5"

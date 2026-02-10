@@ -271,7 +271,7 @@ const Dashboard = () => {
             <div className="card-body">
               <div className="d-flex align-items-center">
                 <div className="flex-grow-1">
-                  <div className="text-muted metric-label mb-2">Personal Leave</div>
+                  <div className="text-muted metric-label mb-2">PL (Paid Leave)</div>
                   <h3 className="fw-bold mb-0 metric-value">{stats?.leaveBalance?.personal ?? 0}</h3>
                 </div>
                 <div className="bg-info bg-opacity-10 metric-icon">

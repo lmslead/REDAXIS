@@ -15,14 +15,15 @@ export const EMPLOYEE_DOCUMENT_TYPES = [
     description: 'Confirmation issued after successful probation',
   },
   {
-    key: 'relieving_letter',
-    label: 'Relieving Letter',
-    description: 'Exit letter shared when employee leaves the company',
+    key: 'relieving_experience_letter',
+    label: 'Relieving/Experience Letter',
+    description: 'Exit letter and experience certificate when employee leaves',
   },
   {
-    key: 'experience_letter',
-    label: 'Experience Letter',
-    description: 'Experience certificate handed over on exit',
+    key: 'appraisal_letter',
+    label: 'Appraisal Letter',
+    description: 'Performance appraisal letters (can have multiple)',
+    allowMultiple: true,
   },
   {
     key: 'pan_card_document',

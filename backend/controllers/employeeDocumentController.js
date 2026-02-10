@@ -129,11 +129,15 @@ export const uploadEmployeeDocument = async (req, res) => {
 
     await fs.promises.writeFile(destination, compressedBuffer);
 
-    const existingDocument = await EmployeeDocument.findOne({ employee: targetEmployeeId, docType });
+    const existingDocument = docConfig?.allowMultiple 
+      ? null 
+      : await EmployeeDocument.findOne({ employee: targetEmployeeId, docType });
 
-    const documentRecord = await EmployeeDocument.findOneAndUpdate(
-      { employee: targetEmployeeId, docType },
-      {
+    let documentRecord;
+    
+    if (docConfig?.allowMultiple) {
+      // For multiple documents, always create a new record
+      documentRecord = await EmployeeDocument.create({
         employee: targetEmployeeId,
         docType,
         fileName: finalFileName,
@@ -143,11 +147,30 @@ export const uploadEmployeeDocument = async (req, res) => {
         compression: 'gzip',
         uploadedBy: req.user._id,
         uploadedAt: new Date(),
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    )
-      .populate('employee', 'firstName lastName employeeId status')
-      .populate('uploadedBy', 'firstName lastName employeeId');
+      });
+      documentRecord = await EmployeeDocument.findById(documentRecord._id)
+        .populate('employee', 'firstName lastName employeeId status')
+        .populate('uploadedBy', 'firstName lastName employeeId');
+    } else {
+      // For single documents, replace existing
+      documentRecord = await EmployeeDocument.findOneAndUpdate(
+        { employee: targetEmployeeId, docType },
+        {
+          employee: targetEmployeeId,
+          docType,
+          fileName: finalFileName,
+          filePath: destination,
+          fileSize: req.file.size,
+          storedFileSize: compressedBuffer.length,
+          compression: 'gzip',
+          uploadedBy: req.user._id,
+          uploadedAt: new Date(),
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      )
+        .populate('employee', 'firstName lastName employeeId status')
+        .populate('uploadedBy', 'firstName lastName employeeId');
+    }
 
     if (existingDocument?.filePath && existingDocument.filePath !== destination) {
       fs.promises.unlink(existingDocument.filePath).catch((unlinkError) => {
