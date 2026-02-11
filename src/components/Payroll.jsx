@@ -28,6 +28,28 @@ const createDefaultUploadForm = () => ({
   remarks: '',
 });
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const getToken = () => localStorage.getItem('token');
+
+const leaveBalanceAPI = {
+  updateBalance: async (employeeId, data) => {
+    const token = getToken();
+    const response = await fetch(`${API_BASE_URL}/leaves/balance/${employeeId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to update leave balance');
+    }
+    return response.json();
+  }
+};
+
 const Payroll = () => {
   const [payrolls, setPayrolls] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +75,18 @@ const Payroll = () => {
   const [periodPayslipEmployees, setPeriodPayslipEmployees] = useState([]);
   const [periodLookupLoading, setPeriodLookupLoading] = useState(false);
   const [periodLookupError, setPeriodLookupError] = useState('');
+  
+  // Leave Balance state
+  const [leaveBalanceSearch, setLeaveBalanceSearch] = useState('');
+  const [showLeaveBalanceModal, setShowLeaveBalanceModal] = useState(false);
+  const [leaveBalanceLoading, setLeaveBalanceLoading] = useState(false);
+  const [leaveBalanceSaveMessage, setLeaveBalanceSaveMessage] = useState('');
+  const [leaveBalanceForm, setLeaveBalanceForm] = useState({
+    employeeId: '',
+    personal: 0,
+    sick: 0,
+    casual: 0
+  });
 
   const fetchPeriodPayslipEmployees = useCallback(async (month, year) => {
     if (!month || !year) {
@@ -90,6 +124,7 @@ const Payroll = () => {
     : false;
   const canManage = currentUser?.managementLevel >= 2; // Only L2 and L3 can manage payroll
   const canUploadPayslips = currentUser?.managementLevel === 3 && isFinanceUploader;
+  const canManageLeaveBalances = currentUser?.managementLevel >= 4 || (currentUser?.managementLevel === 3 && isFinanceUploader);
 
   useEffect(() => {
     fetchPayrolls();
@@ -100,10 +135,10 @@ const Payroll = () => {
   }, [payslipFilterMonth, payslipFilterYear]);
 
   useEffect(() => {
-    if (canUploadPayslips) {
+    if (canUploadPayslips || canManageLeaveBalances) {
       fetchEmployees();
     }
-  }, [canUploadPayslips]);
+  }, [canUploadPayslips, canManageLeaveBalances]);
 
   useEffect(() => {
     if (!showUploadModal) return;
@@ -168,6 +203,70 @@ const Payroll = () => {
       console.error('Error fetching employees:', error);
     }
   };
+
+  // Leave Balance functions
+  const openLeaveBalanceModal = (employee) => {
+    setLeaveBalanceSaveMessage('');
+    setLeaveBalanceForm({
+      employeeId: employee._id,
+      personal: employee.leaveBalance?.personal ?? 0,
+      sick: employee.leaveBalance?.sick ?? 0,
+      casual: employee.leaveBalance?.casual ?? 0
+    });
+    setShowLeaveBalanceModal(true);
+  };
+
+  const handleLeaveBalanceSave = async (e) => {
+    e.preventDefault();
+    if (!leaveBalanceForm.employeeId) return;
+    
+    try {
+      setLeaveBalanceLoading(true);
+      setLeaveBalanceSaveMessage('');
+      
+      const response = await leaveBalanceAPI.updateBalance(leaveBalanceForm.employeeId, {
+        personal: leaveBalanceForm.personal,
+        sick: leaveBalanceForm.sick,
+        casual: leaveBalanceForm.casual
+      });
+
+      const updated = response?.data;
+      if (updated?._id) {
+        setEmployees((prev) =>
+          prev.map((emp) => (emp._id === updated._id ? { ...emp, ...updated } : emp))
+        );
+      }
+
+      setLeaveBalanceSaveMessage('Leave balance updated successfully.');
+    } catch (error) {
+      alert(error.message || 'Failed to update leave balance');
+    } finally {
+      setLeaveBalanceLoading(false);
+    }
+  };
+
+  const getLeaveBalanceEmployeeDisplayName = (employee) => {
+    if (!employee) return '';
+    const name = `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
+    const code = employee.employeeId ? ` (${employee.employeeId})` : '';
+    return `${name}${code}`.trim();
+  };
+
+  const normalizeSearchText = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/[\s(){}._-]+|\[|\]/g, '');
+
+  const filteredLeaveBalanceEmployees = employees.filter((employee) => {
+    if (!leaveBalanceSearch.trim()) return true;
+    const term = normalizeSearchText(leaveBalanceSearch.trim());
+    if (!term) return true;
+    const departmentName = employee.department?.name || employee.departmentName || '';
+    const haystack = normalizeSearchText(
+      `${employee.firstName || ''} ${employee.lastName || ''} ${employee.employeeId || ''} ${employee.email || ''} ${departmentName} ${employee.position || ''}`
+    );
+    return haystack.includes(term);
+  });
 
   const handleViewDetails = (payroll) => {
     setSelectedPayroll(payroll);
@@ -423,6 +522,14 @@ const Payroll = () => {
           >
             Payslips
           </button>
+          {canManageLeaveBalances && (
+            <button
+              className={`btn ${activeTab === 'leaveBalances' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setActiveTab('leaveBalances')}
+            >
+              <i className="bi bi-calendar-check me-2"></i>Leave Balances
+            </button>
+          )}
         </div>
       </div>
 
@@ -751,6 +858,207 @@ const Payroll = () => {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Leave Balances Tab */}
+      {activeTab === 'leaveBalances' && canManageLeaveBalances && (
+        <div className="card border-0 shadow-sm">
+          <div className="card-body">
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+              <div>
+                <h5 className="fw-bold mb-1">Employee Leave Balances</h5>
+                <p className="text-muted mb-0">
+                  View and adjust leave balances for all employees. Changes take effect immediately.
+                </p>
+              </div>
+            </div>
+            
+            <div className="d-flex flex-wrap gap-2 mb-3" style={{ position: 'relative', zIndex: 10 }}>
+              <div style={{ flex: '0 1 350px' }}>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="🔍 Search by name or employee ID..."
+                  value={leaveBalanceSearch}
+                  onChange={(e) => setLeaveBalanceSearch(e.target.value)}
+                  autoComplete="off"
+                  style={{ position: 'relative', zIndex: 10 }}
+                />
+              </div>
+              <div>
+                <button
+                  className="btn btn-outline-secondary"
+                  onClick={() => setLeaveBalanceSearch('')}
+                  style={{ position: 'relative', zIndex: 10 }}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="table-responsive">
+              <table className="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Department</th>
+                    <th className="text-center">PL (Paid Leave)</th>
+                    <th className="text-center">Sick Leave</th>
+                    <th className="text-center">Casual Leave</th>
+                    <th className="text-center">Last Updated</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLeaveBalanceEmployees.map((employee) => (
+                    <tr key={`leave-balance-${employee._id}`}>
+                      <td>
+                        <strong>{employee.firstName} {employee.lastName}</strong>
+                        <br />
+                        <small className="text-muted">{employee.employeeId}</small>
+                      </td>
+                      <td>{employee.department?.name || 'N/A'}</td>
+                      <td className="text-center">
+                        <span className="badge bg-info fs-6">{employee.leaveBalance?.personal ?? 0}</span>
+                      </td>
+                      <td className="text-center">
+                        <span className="badge bg-danger fs-6">{employee.leaveBalance?.sick ?? 0}</span>
+                      </td>
+                      <td className="text-center">
+                        <span className="badge bg-primary fs-6">{employee.leaveBalance?.casual ?? 0}</span>
+                      </td>
+                      <td className="text-center">
+                        {employee.leaveBalanceMeta?.lastAdjustedAt ? (
+                          <small className="text-muted">
+                            {new Date(employee.leaveBalanceMeta.lastAdjustedAt).toLocaleDateString()}
+                            {employee.leaveBalanceMeta?.lastAdjustedBy && (
+                              <><br/>by {employee.leaveBalanceMeta.lastAdjustedBy.firstName || 'Finance'}</>
+                            )}
+                          </small>
+                        ) : (
+                          <small className="text-muted">Not adjusted</small>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => openLeaveBalanceModal(employee)}
+                        >
+                          <i className="bi bi-pencil me-1"></i>Adjust
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredLeaveBalanceEmployees.length === 0 && (
+                <div className="text-center py-5 text-muted">
+                  <i className="bi bi-people fs-1 d-block mb-2"></i>
+                  <p>
+                    {leaveBalanceSearch
+                      ? 'No employees match your search.'
+                      : 'No employees found.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Balance Adjustment Modal */}
+      {showLeaveBalanceModal && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Adjust Leave Balance</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowLeaveBalanceModal(false)}
+                ></button>
+              </div>
+              <form onSubmit={handleLeaveBalanceSave}>
+                <div className="modal-body">
+                  {leaveBalanceSaveMessage && (
+                    <div className="alert alert-success py-2 small" role="alert">
+                      <i className="bi bi-check-circle me-2"></i>
+                      {leaveBalanceSaveMessage}
+                    </div>
+                  )}
+
+                  <div className="mb-3">
+                    <label className="form-label">Employee</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={getLeaveBalanceEmployeeDisplayName(
+                        employees.find((e) => e._id === leaveBalanceForm.employeeId)
+                      )}
+                      disabled
+                    />
+                  </div>
+
+                  <div className="row g-3">
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">PL (Paid Leave)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        className="form-control"
+                        value={leaveBalanceForm.personal}
+                        onChange={(e) => setLeaveBalanceForm({ ...leaveBalanceForm, personal: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Sick Leave</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        className="form-control"
+                        value={leaveBalanceForm.sick}
+                        onChange={(e) => setLeaveBalanceForm({ ...leaveBalanceForm, sick: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Casual Leave</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        className="form-control"
+                        value={leaveBalanceForm.casual}
+                        onChange={(e) => setLeaveBalanceForm({ ...leaveBalanceForm, casual: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setShowLeaveBalanceModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={leaveBalanceLoading}
+                  >
+                    {leaveBalanceLoading ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

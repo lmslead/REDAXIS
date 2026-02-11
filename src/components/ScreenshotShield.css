@@ -2,9 +2,15 @@
   position: fixed;
   inset: 0;
   z-index: 2147483646;
-  pointer-events: none;
+  pointer-events: none !important;
   background: transparent;
   transition: background 0.25s ease;
+}
+
+.screenshot-shield *,
+.screenshot-shield *::before,
+.screenshot-shield *::after {
+  pointer-events: none !important;
 }
 
 .screenshot-shield__watermark {
@@ -22,11 +28,13 @@
   transform: rotate(-18deg);
   gap: 1.25rem;
   user-select: none;
+  pointer-events: none;
 }
 
 .screenshot-shield__watermark span {
   white-space: nowrap;
   opacity: 0.8;
+  pointer-events: none;
 }
 
 .screenshot-shield--flash {
