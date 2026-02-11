@@ -214,7 +214,11 @@ const Polls = () => {
 
   const handleRemoveOption = (index) => {
     const next = form.options.filter((_, idx) => idx !== index);
-    setForm({ ...form, options: next.length ? next : [''] });
+    if (form.allowCustomOption) {
+      setForm({ ...form, options: next });
+    } else {
+      setForm({ ...form, options: next.length ? next : [''] });
+    }
   };
 
   const handleSavePoll = async (event) => {
@@ -640,13 +644,13 @@ const Polls = () => {
                             onChange={(e) => handleOptionChange(index, e.target.value)}
                             placeholder={`Option ${index + 1}`}
                             disabled={editingPoll && (editingPoll.totalVotes || 0) > 0}
-                            required
+                            required={!form.allowCustomOption}
                           />
                           <button
                             type="button"
                             className="btn btn-outline-danger btn-sm"
                             onClick={() => handleRemoveOption(index)}
-                            disabled={form.options.length <= 2 || (editingPoll && (editingPoll.totalVotes || 0) > 0)}
+                            disabled={(form.allowCustomOption ? form.options.length <= 0 : form.options.length <= 2) || (editingPoll && (editingPoll.totalVotes || 0) > 0)}
                             title="Remove option"
                           >
                             ✕

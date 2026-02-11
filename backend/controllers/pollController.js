@@ -274,7 +274,7 @@ export const createPoll = async (req, res) => {
     const { title, description, options, allowCustomOption, audienceType, departmentIds, userIds, startDate, endDate } = req.body;
 
     const cleanedOptions = sanitizeOptions(options);
-    if (cleanedOptions.length < 2) {
+    if (!allowCustomOption && cleanedOptions.length < 2) {
       return res.status(400).json({
         success: false,
         message: 'Please provide at least two options for the poll.',
@@ -367,7 +367,8 @@ export const updatePoll = async (req, res) => {
 
     if (!hasVotes) {
       const cleanedOptions = sanitizeOptions(req.body.options || poll.options.map((opt) => opt.label));
-      if (cleanedOptions.length < 2) {
+      const effectiveAllowCustom = 'allowCustomOption' in req.body ? Boolean(req.body.allowCustomOption) : poll.allowCustomOption;
+      if (!effectiveAllowCustom && cleanedOptions.length < 2) {
         return res.status(400).json({
           success: false,
           message: 'Please provide at least two options for the poll.',
