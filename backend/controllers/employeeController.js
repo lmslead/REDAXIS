@@ -357,7 +357,13 @@ export const createEmployee = async (req, res) => {
       console.log('💼 Employee created with sensitive data (onboarding)');
     }
     
-    const employee = await User.create(req.body);
+    // Set default password if not provided
+    const employeeData = { ...req.body };
+    if (!employeeData.password || employeeData.password.trim() === '') {
+      employeeData.password = 'Abc@123';
+    }
+
+    const employee = await User.create(employeeData);
 
     res.status(201).json({
       success: true,
@@ -365,6 +371,51 @@ export const createEmployee = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Create employee error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Reset employee password
+// @route   PUT /api/employees/:id/reset-password
+// @access  Private (L3 and L4)
+export const resetEmployeePassword = async (req, res) => {
+  try {
+    const userLevel = req.user.managementLevel || 0;
+    const targetEmployeeId = req.params.id;
+    const { newPassword } = req.body;
+
+    const password = (newPassword && newPassword.trim()) || 'Abc@123';
+
+    // Get target employee to check their level
+    const targetEmployee = await User.findById(targetEmployeeId);
+    if (!targetEmployee) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const targetLevel = targetEmployee.managementLevel || 0;
+
+    // L3 cannot reset L3 or L4 passwords
+    if (userLevel === 3 && targetLevel >= 3) {
+      return res.status(403).json({
+        success: false,
+        message: 'L3 Admins cannot reset passwords for L3 or L4 level employees.',
+      });
+    }
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    await User.findByIdAndUpdate(targetEmployeeId, { password: hashedPassword });
+
+    console.log(`🔑 L${userLevel} reset password for employee ${targetEmployee.employeeId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password has been reset successfully.',
+    });
+  } catch (error) {
+    console.error('❌ Reset password error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

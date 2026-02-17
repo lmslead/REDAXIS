@@ -81,6 +81,9 @@ const Employees = () => {
   });
   const [exportingJoinings, setExportingJoinings] = useState(false);
   const [exportingEmployeeList, setExportingEmployeeList] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [resetPasswordEmployee, setResetPasswordEmployee] = useState(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('Abc@123');
   
   const currentUser = getUser();
   const currentUserId = currentUser?._id || currentUser?.id;
@@ -94,6 +97,7 @@ const Employees = () => {
   const canExportEmployeeList = currentUser?.managementLevel >= 4 || isFinanceL3User;
   const canManage = currentUser?.managementLevel >= 2; // L2, L3, and L4 can manage employees
   const canManageDocuments = currentUser?.managementLevel >= 3;
+  const canResetPassword = currentUser?.managementLevel >= 3; // L3 and L4 can reset passwords
   const canExportJoinings = isHumanResourcesUser(currentUser);
   const canEditExitDate = currentUser?.managementLevel >= 4 || (isL3User && (isFinanceL3User || isHRUser));
   const getDocumentTypeLabel = (docType) => documentTypes.find((type) => type.key === docType)?.label || 'Document';
@@ -549,6 +553,25 @@ const Employees = () => {
       } catch (error) {
         alert(error.message || 'Delete failed');
       }
+    }
+  };
+
+  const openResetPasswordModal = (employee) => {
+    setResetPasswordEmployee(employee);
+    setResetPasswordValue('Abc@123');
+    setShowResetPasswordModal(true);
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!resetPasswordEmployee) return;
+    try {
+      await employeesAPI.resetPassword(resetPasswordEmployee._id, { newPassword: resetPasswordValue });
+      alert(`Password for ${resetPasswordEmployee.firstName} ${resetPasswordEmployee.lastName} has been reset successfully.`);
+      setShowResetPasswordModal(false);
+      setResetPasswordEmployee(null);
+    } catch (error) {
+      alert(error.message || 'Password reset failed');
     }
   };
 
@@ -1038,6 +1061,18 @@ const Employees = () => {
                               <i className="bi bi-folder-check"></i>
                             </button>
                           )}
+
+                          {/* Reset Password - L3 can reset up to L2, L4 can reset anyone */}
+                          {canResetPassword && employee._id !== currentUserId &&
+                            (currentUser?.managementLevel === 4 || employee.managementLevel < 3) && (
+                            <button
+                              className="btn btn-sm btn-outline-warning"
+                              onClick={() => openResetPasswordModal(employee)}
+                              title="Reset Password"
+                            >
+                              <i className="bi bi-key"></i>
+                            </button>
+                          )}
                           
                           {/* L3 and L4 can manage status (L3 cannot manage L3/L4 status) */}
                           {(currentUser?.managementLevel === 4 || 
@@ -1236,15 +1271,15 @@ const Employees = () => {
                       />
                     </div>
                     <div className="col-md-4">
-                      <label className="form-label">Password {!editEmployee && '*'}</label>
+                      <label className="form-label">Password</label>
                       <input
                         type="password"
                         className="form-control form-control-sm"
-                        required={!editEmployee}
                         value={formData.password}
                         onChange={(e) => setFormData({...formData, password: e.target.value})}
-                        placeholder={editEmployee ? 'Leave blank to keep unchanged' : ''}
+                        placeholder={editEmployee ? 'Leave blank to keep unchanged' : 'Default: Abc@123'}
                       />
+                      {!editEmployee && <small className="text-muted">Leave blank for default: Abc@123</small>}
                     </div>
 
                     {/* Identity Documents */}
@@ -2315,6 +2350,48 @@ const Employees = () => {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {showResetPasswordModal && resetPasswordEmployee && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
+          <div className="modal-dialog modal-sm modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <i className="bi bi-key me-2"></i>Reset Password
+                </h5>
+                <button type="button" className="btn-close" onClick={() => setShowResetPasswordModal(false)}></button>
+              </div>
+              <form onSubmit={handleResetPassword}>
+                <div className="modal-body">
+                  <p className="mb-3 text-muted" style={{ fontSize: '0.85rem' }}>
+                    Reset password for <strong>{resetPasswordEmployee.firstName} {resetPasswordEmployee.lastName}</strong> ({resetPasswordEmployee.employeeId})
+                  </p>
+                  <div className="mb-3">
+                    <label className="form-label">New Password *</label>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm"
+                      required
+                      minLength={6}
+                      value={resetPasswordValue}
+                      onChange={(e) => setResetPasswordValue(e.target.value)}
+                      placeholder="Enter new password"
+                    />
+                    <div className="form-text">Default: Abc@123</div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => setShowResetPasswordModal(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-sm btn-warning">
+                    <i className="bi bi-key me-1"></i>Reset Password
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

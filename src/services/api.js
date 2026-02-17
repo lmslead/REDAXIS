@@ -205,6 +205,10 @@ export const employeesAPI = {
     body: JSON.stringify(employeeData),
   }),
   delete: (id) => apiRequest(`/employees/${id}`, { method: 'DELETE' }),
+  resetPassword: (id, passwordData) => apiRequest(`/employees/${id}/reset-password`, {
+    method: 'PUT',
+    body: JSON.stringify(passwordData),
+  }),
   getStats: () => apiRequest('/employees/stats'),
   updateStatus: (id, statusData) => apiRequest(`/employees/${id}/status`, {
     method: 'PATCH',

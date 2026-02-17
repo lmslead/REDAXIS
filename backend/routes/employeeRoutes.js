@@ -10,6 +10,7 @@ import {
   updateEmployeeExitDate,
   exportEmployeeJoinings,
   exportEmployeeList,
+  resetEmployeePassword,
 } from '../controllers/employeeController.js';
 import { protect, authorizeLevel, authorizeHRDepartment, authorizeFinanceL3OrL4, authorizeExitDateUpdate } from '../middleware/auth.js';
 
@@ -28,6 +29,9 @@ router.get('/:id', protect, getEmployee);
 router.post('/', protect, authorizeLevel(2), createEmployee);
 router.put('/:id', protect, authorizeLevel(2), updateEmployee);
 router.delete('/:id', protect, authorizeLevel(3), deleteEmployee); // Only L3 can delete
+
+// Reset employee password - L3 and L4 only
+router.put('/:id/reset-password', protect, authorizeLevel(3), resetEmployeePassword);
 
 // Update employee status (activate/inactivate/suspend) - L3 and L4 only
 router.patch('/:id/status', protect, authorizeLevel(3), updateEmployeeStatus);
